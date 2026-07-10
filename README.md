@@ -19,6 +19,19 @@ FastAPI app for the LifeHouse OS beta daily email approval & send pipeline.
 - `GOOGLE_REFRESH_TOKEN` — Google OAuth refresh token
 - `LHOS_APPROVERS` — JSON array of approver emails
 - `LHOS_CONTACT_GROUP` — Google Contacts group name (default: "LifeHouse OS Beta - Active")
-- `LHOS_SENDER_EMAIL` — Sender email (default: iris@lifehouseos.app)
+- `LHOS_SENDER_EMAIL` — Sender email (default: iris@lifehouseos.com)
 - `LHOS_SENDER_NAME` — Sender name (default: LifeHouse OS)
 - `LHOS_FEEDBACK_LINK` — Feedback link for beta users
+
+## Google OAuth Bootstrap
+
+After creating a Google Cloud OAuth Desktop client and downloading the JSON file:
+
+```bash
+python oauth_setup.py /Users/bobby/Downloads/client_secret_XXXX.json --push-railway
+```
+
+The helper requests Gmail send, Google Contacts readonly, and Drive readonly scopes. It saves a local
+`google_token.json` file, validates the refresh token, checks the beta contact group, and pushes
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, and `LHOS_SENDER_EMAIL` to the linked
+Railway production service. The JSON files are ignored by git.

@@ -29,9 +29,22 @@ from pydantic import BaseModel
 
 APPROVERS = json.loads(os.getenv("LHOS_APPROVERS", '["kristina@lifehouseos.app","thomas@lifehouseos.app","bobby@lifehouseos.app"]'))
 CONTACT_GROUP_NAME = os.getenv("LHOS_CONTACT_GROUP", "LifeHouse OS Beta - Active")
-SENDER_EMAIL = os.getenv("LHOS_SENDER_EMAIL", "iris@lifehouseos.app")
+SENDER_EMAIL = os.getenv("LHOS_SENDER_EMAIL", "iris@lifehouseos.com")
 SENDER_NAME = os.getenv("LHOS_SENDER_NAME", "LifeHouse OS")
 FEEDBACK_LINK = os.getenv("LHOS_FEEDBACK_LINK", "https://lifehouseos.app/feedback")
+UNSUBSCRIBE_BASE_URL = os.getenv("UNSUBSCRIBE_BASE_URL", "https://lhos-unsubscribe-production.up.railway.app")
+SUPPRESSION_LIST_URL = "https://raw.githubusercontent.com/VastlyResilient/lhos-unsubscribe-data/main/suppression_list.json"
+
+
+def get_suppression_list() -> list:
+    """Fetch the current suppression list from GitHub."""
+    try:
+        resp = httpx.get(SUPPRESSION_LIST_URL, timeout=15)
+        if resp.status_code == 200:
+            return json.loads(resp.text)
+    except Exception:
+        pass
+    return []
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DRAFTS_FILE = DATA_DIR / "drafts.json"
@@ -45,6 +58,7 @@ GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN", "")
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/contacts.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
 ]
 
 # LifeHouse OS brand colors
@@ -449,6 +463,7 @@ async def approve_and_send(draft_id: str, request: Request):
         "draft_id": draft_id,
         "recipient_count": sent_count,
         "total_recipients": len(contacts),
+        "skipped_unsubscribed": skipped_count,
         "errors": errors,
     }
 
