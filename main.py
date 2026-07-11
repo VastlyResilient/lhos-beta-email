@@ -13,6 +13,7 @@ import json
 import os
 import uuid
 import base64
+import html
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -352,11 +353,71 @@ async def approval_page(draft_id: str):
         
         <div class="actions">
           <a href="#" onclick="approveDraft('{draft_id}'); return false;" class="btn btn-approve">✓ Approve & Send</a>
-          <a href="mailto:?subject=Re: Beta Email Draft" class="btn btn-cancel">Request Changes</a>
+          <a href="#" onclick="showEditor(); return false;" class="btn btn-cancel">✏️ Request Changes</a>
+        </div>
+        
+        <!-- Edit Mode (hidden by default) -->
+        <div id="editSection" style="display:none; margin-top:20px;">
+          <div class="info-card" style="padding:20px;">
+            <h2 style="color:{BRAND_NAVY}; font-size:18px; margin-bottom:12px;">Edit Email Content</h2>
+            <p style="font-size:14px; color:#6b7c8d; margin-bottom:16px;">Edit the email subject and HTML content below. When you submit, the revised draft will be sent back to all approvers for review.</p>
+            <label style="display:block; font-size:13px; font-weight:600; color:{BRAND_NAVY}; margin-bottom:4px;">Subject:</label>
+            <input type="text" id="editSubject" value="{draft["subject"]}" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-family:Nunito,sans-serif; margin-bottom:16px; box-sizing:border-box;">
+            <label style="display:block; font-size:13px; font-weight:600; color:{BRAND_NAVY}; margin-bottom:4px;">Email HTML:</label>
+            <textarea id="editHtml" style="width:100%; min-height:500px; padding:12px; border:1px solid #ddd; border-radius:6px; font-size:12px; font-family:monospace; line-height:1.5; box-sizing:border-box; resize:vertical;">{html.escape(draft["html_body"])}</textarea>
+            <div style="text-align:center; margin-top:16px;">
+              <a href="#" onclick="submitChanges('{draft_id}'); return false;" class="btn btn-approve">Submit Revised Draft</a>
+              <a href="#" onclick="cancelEdit(); return false;" class="btn btn-cancel" style="background:#95a5a6;">Cancel</a>
+            </div>
+          </div>
         </div>
       </div>
       
       <script>
+        // Store original draft ID for reference
+        var currentDraftId = '{draft_id}';
+        
+        function showEditor() {{
+          document.getElementById('editSection').style.display = 'block';
+          document.getElementById('editSection').scrollIntoView({{ behavior: 'smooth' }});
+        }}
+        
+        function cancelEdit() {{
+          document.getElementById('editSection').style.display = 'none';
+        }}
+        
+        async function submitChanges(id) {{
+          var subject = document.getElementById('editSubject').value;
+          var html = document.getElementById('editHtml').value;
+          if (!subject.trim() || !html.trim()) {{
+            alert('Subject and email content cannot be empty.');
+            return;
+          }}
+          if (!confirm('Submit this revised draft? It will be sent back to Kristina, Thomas, and Bobby for re-review.')) return;
+          var btn = event.target;
+          btn.textContent = 'Submitting...';
+          btn.style.opacity = '0.6';
+          try {{
+            var resp = await fetch('/api/lhos/drafts/' + id + '/edit', {{
+              method: 'POST',
+              headers: {{'Content-Type': 'application/json'}},
+              body: JSON.stringify({{ subject: subject, html_body: html }})
+            }});
+            var data = await resp.json();
+            if (resp.ok) {{
+              document.body.innerHTML = '<div style="font-family:Nunito,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f8f9fa;"><div style="text-align:center;padding:48px 40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(14,27,51,0.08);max-width:500px;width:90%;"><div style="font-size:48px;margin-bottom:8px;">📝</div><h1 style="color:{BRAND_NAVY};font-size:24px;margin:0 0 8px 0;">Changes Submitted!</h1><p style="color:#6b7c8d;font-size:15px;margin:8px 0;">Your revised draft has been created and sent to all approvers for re-review.</p><p style="color:#a0aec0;font-size:12px;margin-top:16px;">New draft ID: ' + data.new_draft_id + '</p><a href="/lhos/approve/' + data.new_draft_id + '" style="display:inline-block;margin-top:20px;color:{BRAND_AQUA};text-decoration:none;font-size:14px;font-weight:600;">View Revised Draft</a></div></div>';
+            }} else {{
+              alert('Error: ' + (data.detail || 'Unknown error'));
+              btn.textContent = 'Submit Revised Draft';
+              btn.style.opacity = '1';
+            }}
+          }} catch(e) {{
+            alert('Error: ' + e.message);
+            btn.textContent = 'Submit Revised Draft';
+            btn.style.opacity = '1';
+          }}
+        }}
+        
         async function approveDraft(id) {{
           if (!confirm('Are you sure? This will send the email to ALL active beta users immediately.')) return;
           const btn = event.target;
@@ -388,6 +449,81 @@ async def approval_page(draft_id: str):
     </body>
     </html>
     """)
+
+class DraftEdit(BaseModel):
+    subject: str
+    html_body: str
+
+@app.post("/api/lhos/drafts/{draft_id}/edit")
+async def edit_draft(draft_id: str, edit: DraftEdit):
+    """Save edited draft, mark old one as revised, create new pending draft, and email approvers."""
+    drafts = load_drafts()
+    if draft_id not in drafts:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    
+    old_draft = drafts[draft_id]
+    if old_draft["status"] in ("sent", "approved"):
+        raise HTTPException(status_code=400, detail="Cannot edit a draft that is already " + old_draft["status"])
+    
+    # Mark old draft as revised
+    old_draft["status"] = "revised"
+    old_draft["revised_at"] = datetime.now(timezone.utc).isoformat()
+    save_drafts(drafts)
+    
+    # Create new draft with the edited content
+    new_draft_id = str(uuid.uuid4())[:8]
+    drafts = load_drafts()
+    drafts[new_draft_id] = {
+        "id": new_draft_id,
+        "subject": edit.subject,
+        "html_body": edit.html_body,
+        "text_body": old_draft.get("text_body", ""),
+        "date": old_draft["date"],
+        "status": "pending_approval",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "approved_by": None,
+        "approved_at": None,
+        "sent_at": None,
+        "recipient_count": 0,
+        "send_errors": [],
+        "revised_from": draft_id,
+    }
+    save_drafts(drafts)
+    
+    # Send the revised draft to approvers via Gmail
+    try:
+        access_token = get_google_access_token()
+        approval_url = f"/lhos/approve/{new_draft_id}"
+        
+        # Build approver email with "revised" banner
+        approver_html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f8f9fa;font-family:'Nunito','Segoe UI',Arial,sans-serif;">
+<div style="max-width:680px;margin:0 auto;padding:16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:{BRAND_NAVY};border-radius:10px;margin-bottom:16px;">
+<tr><td style="padding:20px 24px;text-align:center;">
+<p style="margin:0 0 8px 0;font-size:14px;color:{BRAND_SAND};font-weight:700;letter-spacing:1px;text-transform:uppercase;">Revised Draft - Pending Approval</p>
+<p style="margin:0 0 14px 0;font-size:13px;color:#a0aec0;">Changes were made via the approval page. Review and approve to send to beta testers.</p>
+<a href="https://lhos-beta-email-production.up.railway.app{approval_url}" style="display:inline-block;background-color:{BRAND_AQUA};color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:14px 40px;border-radius:8px;">Review Revised Draft</a>
+</td></tr></table></div>
+{edit.html_body.replace("UNSUB_URL_PLACEHOLDER", "https://lhos-unsubscribe-production.up.railway.app/?email=preview").replace("RECIPIENT_NAME_PLACEHOLDER", "Hello Beta Tester!")}
+</body></html>"""
+        
+        approver_emails = ",".join(APPROVERS)
+        send_gmail(
+            access_token,
+            to=approver_emails,
+            subject=f"[REVIEW] {edit.subject} (Revised via Editor)",
+            html_body=approver_html,
+            sender_email=SENDER_EMAIL,
+            sender_name=SENDER_NAME,
+        )
+    except Exception as e:
+        # Draft was created but email failed - still return success for the draft
+        pass
+    
+    return {"status": "revised", "old_draft_id": draft_id, "new_draft_id": new_draft_id}
+
 
 @app.post("/api/lhos/approve/{draft_id}")
 async def approve_and_send(draft_id: str, request: Request):
