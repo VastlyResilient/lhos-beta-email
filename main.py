@@ -465,6 +465,15 @@ async def edit_draft(draft_id: str, edit: DraftEdit):
     if old_draft["status"] in ("sent", "approved"):
         raise HTTPException(status_code=400, detail="Cannot edit a draft that is already " + old_draft["status"])
     
+    # HARD GUARD: Block edit if any draft for this date was already sent
+    draft_date = old_draft.get("date", "")
+    for other_id, other_draft in drafts.items():
+        if other_id != draft_id and other_draft.get("date") == draft_date and other_draft.get("status") == "sent":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Emails for {draft_date} have already been sent. Cannot create revised draft."
+            )
+    
     # Mark old draft as revised
     old_draft["status"] = "revised"
     old_draft["revised_at"] = datetime.now(timezone.utc).isoformat()
@@ -535,6 +544,16 @@ async def approve_and_send(draft_id: str, request: Request):
     draft = drafts[draft_id]
     if draft["status"] in ("sent", "approved"):
         raise HTTPException(status_code=400, detail=f"Draft already {draft['status']}")
+    
+    # HARD GUARD: Check if ANY draft for the same date has already been sent
+    # This makes it impossible to send duplicate emails to the same date
+    draft_date = draft.get("date", "")
+    for other_id, other_draft in drafts.items():
+        if other_id != draft_id and other_draft.get("date") == draft_date and other_draft.get("status") == "sent":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Emails for {draft_date} have already been sent (draft {other_id}). Duplicate sends are blocked."
+            )
     
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     approver = body.get("approver", "unknown")
