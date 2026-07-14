@@ -561,20 +561,35 @@ async def approve_and_send(draft_id: str, request: Request):
         raise HTTPException(status_code=500, detail="No contacts found in the beta group")
     
     errors = []
+    # Fetch suppression list
+    suppression_list = get_suppression_list()
+    suppressed_emails = [e.lower() for e in suppression_list]
+    
     sent_count = 0
+    skipped_count = 0
     for contact in contacts:
+        email = contact["email"]
+        # Skip suppressed emails
+        if email.lower() in suppressed_emails:
+            skipped_count += 1
+            continue
         try:
+            # Personalize the unsubscribe URL and greeting for this recipient
+            unsub_url = f"{UNSUBSCRIBE_BASE_URL}/?email={email}"
+            personalized_html = draft["html_body"].replace("UNSUB_URL_PLACEHOLDER", unsub_url)
+            greeting_name = contact.get("name") or email.split("@")[0].title()
+            personalized_html = personalized_html.replace("RECIPIENT_NAME_PLACEHOLDER", f"Hello {greeting_name}!")
             send_gmail(
                 access_token,
-                to=contact["email"],
+                to=email,
                 subject=draft["subject"],
-                html_body=draft["html_body"],
+                html_body=personalized_html,
                 sender_email=SENDER_EMAIL,
                 sender_name=SENDER_NAME,
             )
             sent_count += 1
         except Exception as e:
-            errors.append({"email": contact["email"], "error": str(e)})
+            errors.append({"email": email, "error": str(e)})
     
     draft["status"] = "sent"
     draft["sent_at"] = datetime.now(timezone.utc).isoformat()
