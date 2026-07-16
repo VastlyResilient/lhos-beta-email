@@ -116,6 +116,30 @@ def get_google_access_token() -> str:
         raise HTTPException(status_code=500, detail=f"Google token refresh failed: {resp.text}")
     return resp.json()["access_token"]
 
+def check_gmail_already_sent(access_token: str, subject: str) -> bool:
+    """Check Iris's Gmail sent mail for emails with the same subject sent today.
+    This is the ultimate backstop — independent of local storage, cannot be defeated
+    by volume resets or code bugs.
+    """
+    from datetime import datetime, timezone, timedelta
+    # Search sent mail for same subject, today only
+    today = datetime.now(timezone.utc).strftime("%Y/%m/%d")
+    search_query = f'in:sent subject:"{subject}" newer_than:1d'
+    
+    resp = httpx.get(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+        headers={"Authorization": f"Bearer {access_token}"},
+        params={"q": search_query, "maxResults": 1},
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        # If we can't check, err on the side of NOT blocking (the other guards handle it)
+        return False
+    
+    messages = resp.json().get("messages", [])
+    return len(messages) > 0
+
+
 def get_contact_group_id(access_token: str, group_name: str) -> Optional[str]:
     """Find the contact group resource name by display name."""
     resp = httpx.get(
@@ -580,6 +604,17 @@ async def approve_and_send(draft_id: str, request: Request):
         raise HTTPException(status_code=500, detail="No contacts found in the beta group")
     
     errors = []
+    # GMAIL BACKSTOP: Check if emails with this subject were already sent today
+    # This is independent of local storage — survives volume resets
+    if check_gmail_already_sent(access_token, draft["subject"]):
+        draft["status"] = "error"
+        draft["send_errors"] = ["BLOCKED: Gmail sent mail already contains emails with this subject today. Duplicate prevention."]
+        save_drafts(drafts)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Gmail sent mail already contains emails with subject '{draft['subject']}' sent today. Duplicate send blocked by Gmail backstop."
+        )
+    
     # Fetch suppression list
     suppression_list = get_suppression_list()
     suppressed_emails = [e.lower() for e in suppression_list]
