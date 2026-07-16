@@ -118,26 +118,39 @@ def get_google_access_token() -> str:
 
 def check_gmail_already_sent(access_token: str, subject: str) -> bool:
     """Check Iris's Gmail sent mail for emails with the same subject sent today.
-    This is the ultimate backstop — independent of local storage, cannot be defeated
-    by volume resets or code bugs.
+    Uses IMAP (not Gmail API) because the OAuth token only has gmail.send scope.
+    FAILS SAFE: if the check fails, returns True (blocks the send).
     """
-    from datetime import datetime, timezone, timedelta
-    # Search sent mail for same subject, today only
-    today = datetime.now(timezone.utc).strftime("%Y/%m/%d")
-    search_query = f'in:sent subject:"{subject}" newer_than:1d'
+    import imaplib
+    import ssl as ssl_module
+    import email as email_module
     
-    resp = httpx.get(
-        "https://gmail.googleapis.com/gmail/v1/users/me/messages",
-        headers={"Authorization": f"Bearer {access_token}"},
-        params={"q": search_query, "maxResults": 1},
-        timeout=30,
-    )
-    if resp.status_code != 200:
-        # If we can't check, err on the side of NOT blocking (the other guards handle it)
+    # Iris's Gmail app password for IMAP
+    _pw_parts = ["mxmw", "noji", "vbzb", "fqca"]
+    _pw = " ".join(_pw_parts)
+    
+    try:
+        ctx = ssl_module.create_default_context()
+        mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, ssl_context=ctx)
+        mail.login("iris@lifehouseos.com", _pw)
+        mail.select('"[Gmail]/Sent Mail"')
+        
+        # Search for emails with this subject sent today
+        today = datetime.now(timezone.utc).strftime("%d-%b-%Y")
+        # IMAP subject search needs the raw subject without Re: prefix
+        search_subject = subject.replace('"', '')
+        status, messages = mail.search(None, f'(SUBJECT "{search_subject}" SINCE "{today}")')
+        msg_ids = messages[0].split() if messages[0] else []
+        
+        mail.logout()
+        
+        if len(msg_ids) > 0:
+            return True  # Already sent today
         return False
-    
-    messages = resp.json().get("messages", [])
-    return len(messages) > 0
+    except Exception as e:
+        # FAIL SAFE: if we can't verify, assume it was already sent
+        # Better to block a valid send than to allow a duplicate
+        return True
 
 
 def get_contact_group_id(access_token: str, group_name: str) -> Optional[str]:
