@@ -4,3 +4,5 @@ __pycache__/
 /data/
 *.json
 !railway.json
+
+.automation_token

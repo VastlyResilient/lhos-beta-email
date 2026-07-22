@@ -14,12 +14,15 @@ import os
 import uuid
 import base64
 import html
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
+from email import message_from_bytes
+from email.header import decode_header, make_header
 from pathlib import Path
 from typing import Optional
 
 import httpx
+from delivery import atomic_json_write, deliver_once
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -38,18 +41,20 @@ SUPPRESSION_LIST_URL = "https://raw.githubusercontent.com/VastlyResilient/lhos-u
 
 
 def get_suppression_list() -> list:
-    """Fetch the current suppression list from GitHub."""
-    try:
-        resp = httpx.get(SUPPRESSION_LIST_URL, timeout=15)
-        if resp.status_code == 200:
-            return json.loads(resp.text)
-    except Exception:
-        pass
-    return []
+    """Fetch suppression data from the live unsubscribe service. Fail closed."""
+    resp = httpx.get(f"{UNSUBSCRIBE_BASE_URL}/api/list", timeout=20)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Suppression service unavailable: {resp.status_code}")
+    data = resp.json()
+    if not isinstance(data.get("unsubscribed", []), list):
+        raise RuntimeError("Suppression service returned invalid data")
+    return data.get("unsubscribed", [])
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DRAFTS_FILE = DATA_DIR / "drafts.json"
 LOG_FILE = DATA_DIR / "send_log.json"
+LEDGER_DIR = DATA_DIR / "send_ledgers"
+LEDGER_DIR.mkdir(parents=True, exist_ok=True)
 
 # Google credentials (from OAuth token, set as Railway env vars)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -80,7 +85,7 @@ def load_drafts() -> dict:
     return {}
 
 def save_drafts(drafts: dict):
-    DRAFTS_FILE.write_text(json.dumps(drafts, indent=2, ensure_ascii=False))
+    atomic_json_write(DRAFTS_FILE, drafts)
 
 def load_log() -> list:
     if LOG_FILE.exists():
@@ -91,7 +96,7 @@ def load_log() -> list:
     return []
 
 def save_log(log: list):
-    LOG_FILE.write_text(json.dumps(log, indent=2, ensure_ascii=False))
+    atomic_json_write(LOG_FILE, log)
 
 # ---------------------------------------------------------------------------
 # Google API helpers
@@ -116,41 +121,24 @@ def get_google_access_token() -> str:
         raise HTTPException(status_code=500, detail=f"Google token refresh failed: {resp.text}")
     return resp.json()["access_token"]
 
-def check_gmail_already_sent(access_token: str, subject: str) -> bool:
-    """Check Iris's Gmail sent mail for emails with the same subject sent today.
-    Uses IMAP (not Gmail API) because the OAuth token only has gmail.send scope.
-    FAILS SAFE: if the check fails, returns True (blocks the send).
-    """
-    import imaplib
-    import ssl as ssl_module
-    import email as email_module
-    
-    # Iris's Gmail app password for IMAP
-    _pw_parts = ["mxmw", "noji", "vbzb", "fqca"]
-    _pw = " ".join(_pw_parts)
-    
-    try:
-        ctx = ssl_module.create_default_context()
-        mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, ssl_context=ctx)
-        mail.login("iris@lifehouseos.com", _pw)
-        mail.select('"[Gmail]/Sent Mail"')
-        
-        # Search for emails with this subject sent today
-        today = datetime.now(timezone.utc).strftime("%d-%b-%Y")
-        # IMAP subject search needs the raw subject without Re: prefix
-        search_subject = subject.replace('"', '')
-        status, messages = mail.search(None, f'(SUBJECT "{search_subject}" SINCE "{today}")')
-        msg_ids = messages[0].split() if messages[0] else []
-        
-        mail.logout()
-        
-        if len(msg_ids) > 0:
-            return True  # Already sent today
-        return False
-    except Exception as e:
-        # FAIL SAFE: if we can't verify, assume it was already sent
-        # Better to block a valid send than to allow a duplicate
-        return True
+def _decode_header(value: str) -> str:
+    try: return str(make_header(decode_header(value or "")))
+    except Exception: return value or ""
+
+def gmail_exact_sent(access_token: str, to_email: str, subject: str, date_key: str) -> bool:
+    """Exact Sent-Mail recipient+subject check. Any API failure blocks delivery."""
+    day = datetime.strptime(date_key, "%Y-%m-%d").date()
+    nxt = day + timedelta(days=1)
+    q = f'in:sent to:{to_email} subject:"{subject}" after:{day:%Y/%m/%d} before:{nxt:%Y/%m/%d}'
+    resp = httpx.get("https://gmail.googleapis.com/gmail/v1/users/me/messages", headers={"Authorization": f"Bearer {access_token}"}, params={"q": q, "maxResults": 20}, timeout=30)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gmail Sent precheck failed: {resp.status_code} {resp.text}")
+    for item in resp.json().get("messages", []):
+        meta = httpx.get(f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{item['id']}", headers={"Authorization": f"Bearer {access_token}"}, params={"format":"metadata","metadataHeaders":["To","Subject"]}, timeout=30)
+        if meta.status_code != 200: raise RuntimeError(f"Gmail metadata check failed: {meta.status_code}")
+        headers = {h.get("name","").lower(): h.get("value","") for h in meta.json().get("payload",{}).get("headers",[])}
+        if _decode_header(headers.get("subject")) == subject and to_email.lower() in headers.get("to","").lower(): return True
+    return False
 
 
 def get_contact_group_id(access_token: str, group_name: str) -> Optional[str]:
@@ -238,28 +226,17 @@ class DraftCreate(BaseModel):
 async def root():
     return {"service": "LifeHouse OS Beta Email", "status": "running"}
 
+def create_draft_record(subject: str, html_body: str, text_body: str, date_value: str):
+    draft_id = uuid.uuid4().hex
+    drafts = load_drafts()
+    drafts[draft_id] = {"id":draft_id,"subject":subject,"html_body":html_body,"text_body":text_body,"date":date_value or datetime.now(timezone.utc).strftime("%Y-%m-%d"),"status":"pending_approval","created_at":datetime.now(timezone.utc).isoformat(),"approved_by":None,"approved_at":None,"sent_at":None,"recipient_count":0,"send_errors":[]}
+    save_drafts(drafts)
+    return {"draft_id":draft_id,"approval_url":f"/lhos/approve/{draft_id}","status":"pending_approval"}
+
 @app.post("/api/lhos/drafts")
 async def create_draft(draft: DraftCreate):
     """Register a new draft for approval."""
-    draft_id = str(uuid.uuid4())[:8]
-    drafts = load_drafts()
-    drafts[draft_id] = {
-        "id": draft_id,
-        "subject": draft.subject,
-        "html_body": draft.html_body,
-        "text_body": draft.text_body,
-        "date": draft.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "status": "pending_approval",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "approved_by": None,
-        "approved_at": None,
-        "sent_at": None,
-        "recipient_count": 0,
-        "send_errors": [],
-    }
-    save_drafts(drafts)
-    approval_url = f"/lhos/approve/{draft_id}"
-    return {"draft_id": draft_id, "approval_url": approval_url, "status": "pending_approval"}
+    return create_draft_record(draft.subject,draft.html_body,draft.text_body,draft.date)
 
 @app.get("/api/lhos/drafts")
 async def list_drafts():
@@ -571,121 +548,57 @@ async def edit_draft(draft_id: str, edit: DraftEdit):
     return {"status": "revised", "old_draft_id": draft_id, "new_draft_id": new_draft_id}
 
 
+def send_draft_safely(draft_id: str, approver: str):
+    drafts = load_drafts()
+    if draft_id not in drafts: raise HTTPException(status_code=404, detail="Draft not found")
+    draft = drafts[draft_id]
+    if draft.get("status") == "sent":
+        return {"status":"sent","draft_id":draft_id,"recipient_count":draft.get("recipient_count",0),"newly_sent_count":0,"errors":[]}
+    if draft.get("status") == "revised": raise HTTPException(status_code=409, detail="Draft was superseded")
+    draft_date = draft.get("date", "")
+    for oid, other in drafts.items():
+        if oid != draft_id and other.get("date") == draft_date and other.get("status") == "sent":
+            raise HTTPException(status_code=409, detail=f"Emails for {draft_date} already sent via draft {oid}")
+    access_token = get_google_access_token()
+    group_id = get_contact_group_id(access_token, CONTACT_GROUP_NAME)
+    if not group_id: raise HTTPException(status_code=500, detail=f"Contact group '{CONTACT_GROUP_NAME}' not found")
+    contacts = get_contacts_in_group(access_token, group_id)
+    if not contacts: raise HTTPException(status_code=500, detail="No contacts found in beta group")
+    try: suppressed = get_suppression_list()
+    except Exception as exc: raise HTTPException(status_code=503, detail=str(exc))
+    try: date_key = datetime.strptime(draft_date, "%B %d, %Y").strftime("%Y-%m-%d")
+    except Exception: raise HTTPException(status_code=400, detail="Draft date is invalid")
+    draft.update({"status":"sending","approved_by":approver,"approved_at":draft.get("approved_at") or datetime.now(timezone.utc).isoformat()}); save_drafts(drafts)
+    ledger_file = LEDGER_DIR / f"{date_key}.json"
+    def precheck(addr, subject): return gmail_exact_sent(access_token, addr, subject, date_key)
+    def send_one(addr, subject, body): return send_gmail(access_token, addr, subject, body, SENDER_EMAIL, SENDER_NAME)
+    result = deliver_once(date_key=date_key, subject=draft["subject"], html_body=draft["html_body"], contacts=contacts, suppressed=suppressed, ledger_file=ledger_file, already_sent=precheck, send_one=send_one, unsubscribe_base=UNSUBSCRIBE_BASE_URL)
+    drafts = load_drafts(); draft = drafts[draft_id]
+    draft.update({"status":"sent" if result["complete"] else "partial","sent_at":datetime.now(timezone.utc).isoformat() if result["complete"] else None,"recipient_count":result["delivered_count"],"newly_sent_count":result["newly_sent_count"],"send_errors":result["errors"],"ledger_file":str(ledger_file)}); save_drafts(drafts)
+    log = load_log(); log.append({"draft_id":draft_id,"date":draft_date,"subject":draft["subject"],"approved_by":approver,"approved_at":draft.get("approved_at"),"completed_at":datetime.now(timezone.utc).isoformat(),**result}); save_log(log)
+    return {"status":draft["status"],"draft_id":draft_id,"recipient_count":result["delivered_count"],"total_recipients":len(contacts),"skipped_unsubscribed":result["suppressed_count"],"newly_sent_count":result["newly_sent_count"],"errors":result["errors"]}
+
 @app.post("/api/lhos/approve/{draft_id}")
 async def approve_and_send(draft_id: str, request: Request):
-    """Approve the draft and send to all beta users."""
-    drafts = load_drafts()
-    if draft_id not in drafts:
-        raise HTTPException(status_code=404, detail="Draft not found")
-    
-    draft = drafts[draft_id]
-    if draft["status"] in ("sent", "approved"):
-        raise HTTPException(status_code=400, detail=f"Draft already {draft['status']}")
-    
-    # HARD GUARD: Check if ANY draft for the same date has already been sent
-    # This makes it impossible to send duplicate emails to the same date
-    draft_date = draft.get("date", "")
-    for other_id, other_draft in drafts.items():
-        if other_id != draft_id and other_draft.get("date") == draft_date and other_draft.get("status") == "sent":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Emails for {draft_date} have already been sent (draft {other_id}). Duplicate sends are blocked."
-            )
-    
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
-    approver = body.get("approver", "unknown")
-    
-    draft["status"] = "approved"
-    draft["approved_by"] = approver
-    draft["approved_at"] = datetime.now(timezone.utc).isoformat()
-    save_drafts(drafts)
-    
-    access_token = get_google_access_token()
-    
-    group_id = get_contact_group_id(access_token, CONTACT_GROUP_NAME)
-    if not group_id:
-        draft["status"] = "error"
-        draft["send_errors"] = [f"Contact group '{CONTACT_GROUP_NAME}' not found"]
-        save_drafts(drafts)
-        raise HTTPException(status_code=500, detail=f"Contact group '{CONTACT_GROUP_NAME}' not found")
-    
-    contacts = get_contacts_in_group(access_token, group_id)
-    if not contacts:
-        draft["status"] = "error"
-        draft["send_errors"] = ["No contacts found in group"]
-        save_drafts(drafts)
-        raise HTTPException(status_code=500, detail="No contacts found in the beta group")
-    
-    errors = []
-    # GMAIL BACKSTOP: Check if emails with this subject were already sent today
-    # This is independent of local storage — survives volume resets
-    if check_gmail_already_sent(access_token, draft["subject"]):
-        draft["status"] = "error"
-        draft["send_errors"] = ["BLOCKED: Gmail sent mail already contains emails with this subject today. Duplicate prevention."]
-        save_drafts(drafts)
-        raise HTTPException(
-            status_code=409,
-            detail=f"Gmail sent mail already contains emails with subject '{draft['subject']}' sent today. Duplicate send blocked by Gmail backstop."
-        )
-    
-    # Fetch suppression list
-    suppression_list = get_suppression_list()
-    suppressed_emails = [e.lower() for e in suppression_list]
-    
-    sent_count = 0
-    skipped_count = 0
-    for contact in contacts:
-        email = contact["email"]
-        # Skip suppressed emails
-        if email.lower() in suppressed_emails:
-            skipped_count += 1
-            continue
-        try:
-            # Personalize the unsubscribe URL and greeting for this recipient
-            unsub_url = f"{UNSUBSCRIBE_BASE_URL}/?email={email}"
-            personalized_html = draft["html_body"].replace("UNSUB_URL_PLACEHOLDER", unsub_url)
-            greeting_name = contact.get("name") or email.split("@")[0].title()
-            personalized_html = personalized_html.replace("RECIPIENT_NAME_PLACEHOLDER", f"Hello {greeting_name}!")
-            send_gmail(
-                access_token,
-                to=email,
-                subject=draft["subject"],
-                html_body=personalized_html,
-                sender_email=SENDER_EMAIL,
-                sender_name=SENDER_NAME,
-            )
-            sent_count += 1
-        except Exception as e:
-            errors.append({"email": email, "error": str(e)})
-    
-    draft["status"] = "sent"
-    draft["sent_at"] = datetime.now(timezone.utc).isoformat()
-    draft["recipient_count"] = sent_count
-    draft["send_errors"] = errors
-    save_drafts(drafts)
-    
-    log = load_log()
-    log.append({
-        "draft_id": draft_id,
-        "date": draft["date"],
-        "subject": draft["subject"],
-        "approved_by": approver,
-        "approved_at": draft["approved_at"],
-        "sent_at": draft["sent_at"],
-        "recipient_count": sent_count,
-        "total_recipients": len(contacts),
-        "errors": errors,
-    })
-    save_log(log)
-    
-    return {
-        "status": "sent",
-        "draft_id": draft_id,
-        "recipient_count": sent_count,
-        "total_recipients": len(contacts),
-        "skipped_unsubscribed": skipped_count,
-        "errors": errors,
-    }
+    return send_draft_safely(draft_id, body.get("approver", "unknown"))
+
+# n8n cloud orchestration router (authenticated by X-LHOS-Automation-Token)
+from cloud_automation import configure_router
+_public_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "lhos-beta-email-production.up.railway.app")
+PUBLIC_URL = os.getenv("LHOS_PUBLIC_URL", _public_domain if _public_domain.startswith("http") else "https://" + _public_domain)
+app.include_router(configure_router(
+    get_token=get_google_access_token,
+    send_email=send_gmail,
+    create_draft=create_draft_record,
+    load_drafts=load_drafts,
+    save_drafts=save_drafts,
+    send_draft=send_draft_safely,
+    approvers=APPROVERS,
+    public_url=PUBLIC_URL,
+    sender_email=SENDER_EMAIL,
+    sender_name=SENDER_NAME,
+))
 
 @app.get("/api/lhos/log")
 async def get_send_log():
