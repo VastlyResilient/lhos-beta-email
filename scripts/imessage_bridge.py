@@ -40,7 +40,7 @@ def decide(actor,text,guid,dry=False):
 def signed(t):return t.strip() if t.strip().endswith(SIGN) else t.strip()+'\n\n'+SIGN
 def send_group(text,s,dry=False):
  now=dt.datetime.now(ET)
- if not dry and not (7<=now.hour<9 or (now.hour==9 and now.minute<15)):raise RuntimeError('FFAI send blocked outside 07:00-09:15 Eastern')
+ if not dry and not (7<=now.hour<15 or (now.hour==15 and now.minute<15)):raise RuntimeError('FFAI send blocked outside 07:00-15:15 Eastern')
  verify();text=signed(text);day=now.strftime('%Y-%m-%d');key=hashlib.sha256((day+CHAT_GUID+text).encode()).hexdigest();s.setdefault('send_attempts',{})
  if key in s['sent_hashes']:return {'action':'duplicate_suppressed'}
  if s['send_attempts'].get(key,{}).get('status')=='UNCERTAIN':return {'action':'uncertain_send_blocked'}
@@ -68,15 +68,15 @@ def direct(row,s):
  return bool(re.match(r'(?is)\A[ \t]*@?(?:zilla|iris)[ \t]*:[ \t]*(?:\S(?:.*\S)?)[ \t]*\Z',t))
 def run(dry=False,initialize=False,health=False):
  now=dt.datetime.now(ET)
- if not (initialize or health or 7<=now.hour<9 or (now.hour==9 and now.minute<15)):
-  return {"action":"outside_active_window","time":now.isoformat(),"window":"07:00-09:15 America/New_York"}
+ if not (initialize or health or 7<=now.hour<15 or (now.hour==15 and now.minute<15)):
+  return {"action":"outside_active_window","time":now.isoformat(),"window":"07:00-15:15 America/New_York"}
  verify();s=load();rows=sorted(history(),key=lambda x:x.get('id',0));maxid=max([x.get('id',0) for x in rows] or [0])
  if initialize:s['last_seen_id']=maxid;save(s);return {'action':'initialized','last_seen_id':maxid,'chat':'FFAI','participants':sorted(NAMES.values())}
  st=status();now=dt.datetime.now(ET);stage=(st.get('state') or {}).get('stage');out={'time':now.isoformat(),'stage':stage,'actions':[]}
  if health:return {**out,'health':'ok','chat':'FFAI'}
  if ((now.hour==7 and now.minute>=5) or now.hour==8) and stage in (None,'hold'):
-  out['actions'].append(send_group("Kristina and Thomas — today’s LifeHouse OS email content has not been uploaded or is incomplete. Iris has emailed Kristina. Please upload the dated content before 9:00 AM ET. No beta email will be sent without valid content and approval.",s,dry))
- if 7<=now.hour<9:
+  out['actions'].append(send_group("Kristina and Thomas — today’s LifeHouse OS email content has not been uploaded or is incomplete. Iris has emailed Kristina. Please upload the dated content before 3:00 PM ET. No beta email will be sent without valid content and approval.",s,dry))
+ if 7<=now.hour<15:
   new=[x for x in rows if int(x.get('id',0))>int(s.get('last_seen_id',0))]
   for i,row in enumerate(new):
    guid=row.get('guid') or ('local-'+str(row.get('id')));inbound_key='imsg:v1:'+CHAT_GUID+':'+guid;text=(row.get('text') or '').strip();who=actor(row)
@@ -85,15 +85,15 @@ def run(dry=False,initialize=False,health=False):
     d=decide(who,text,guid,dry);out['actions'].append({'actor':who,'decision':d})
     if not dry:
      a=d.get('action')
-     if a=='approval_recorded':send_group(f"Approval recorded from {who}. If no later revision is requested, Iris will send the validated email at 9:00 AM ET.",s)
-     elif a=='revised_review_sent':send_group(f"I applied {who}’s requested changes and emailed a revised review to Kristina, Bobby, and Thomas. A new approval is required before 9:00 AM ET.",s)
-     elif a=='send_held':send_group(f"The email is on hold per {who}. A fresh approval is required before 9:00 AM ET.",s)
+     if a=='approval_recorded':send_group(f"Approval recorded from {who}. If no later revision is requested, Iris will send the validated email at 3:00 PM ET.",s)
+     elif a=='revised_review_sent':send_group(f"I applied {who}’s requested changes and emailed a revised review to Kristina, Bobby, and Thomas. A new approval is required before 3:00 PM ET.",s)
+     elif a=='send_held':send_group(f"The email is on hold per {who}. A fresh approval is required before 3:00 PM ET.",s)
      elif a=='clarification_needed':send_group(f"{who}, were you talking to me about today’s LifeHouse OS email? Please mention Iris or Zilla and state approve, hold, or the exact revision.",s)
    elif re.search(r'\b(?:iris|zilla)\b',text,re.I) and not conversation(new,i):out['actions'].append(send_group(f"{who}, were you talking to me? Please use ‘Zilla:’ followed by approve, hold, status, or the exact email revision.",s,dry))
    s['processed'].append(inbound_key)
   if not dry:s['last_seen_id']=maxid;save(s)
- if now.hour==9 and 2<=now.minute<15 and (status().get('state') or {}).get('stage') not in ('sent','sent_external'):
-  out['actions'].append(send_group("Kristina and Thomas — today’s LifeHouse OS beta email was not sent. Either valid content or final approval was missing by the 9:00 AM ET deadline. No beta tester received an email.",s,dry))
+ if now.hour==15 and 2<=now.minute<15 and (status().get('state') or {}).get('stage') not in ('sent','sent_external'):
+  out['actions'].append(send_group("Kristina and Thomas — today’s LifeHouse OS beta email was not sent. Either valid content or final approval was missing by the 3:00 PM ET deadline. No beta tester received an email.",s,dry))
  return out
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('--dry-run',action='store_true');p.add_argument('--initialize',action='store_true');p.add_argument('--health-check',action='store_true');a=p.parse_args()

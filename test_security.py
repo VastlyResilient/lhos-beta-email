@@ -40,11 +40,11 @@ class SecurityTests(unittest.TestCase):
   self.assertEqual(out['status'],'approved');self.assertEqual(module.load_drafts()[d['draft_id']]['status'],'approved')
  def test_production_approval_rejected_after_deadline(self):
   d=self.main.create_draft_record('s','RECIPIENT_NAME_PLACEHOLDER UNSUB_URL_PLACEHOLDER','content','July 23, 2026');module=self.main
-  class AtNine(RealDateTime):
+  class AtThree(RealDateTime):
    @classmethod
    def now(cls,tz=None):
-    x=RealDateTime(2026,7,23,9,1,tzinfo=module.ET);return x.astimezone(tz) if tz else x
-  with patch.object(module,'datetime',AtNine):
+    x=RealDateTime(2026,7,23,15,1,tzinfo=module.ET);return x.astimezone(tz) if tz else x
+  with patch.object(module,'datetime',AtThree):
    with self.assertRaises(HTTPException):module.record_draft_approval(d['draft_id'],'late')
  def test_production_signed_link_is_preview_only(self):
   d=self.main.create_draft_record('s','RECIPIENT_NAME_PLACEHOLDER UNSUB_URL_PLACEHOLDER','content','July 23, 2026');tok=self.main.approval_token(d['draft_id'])

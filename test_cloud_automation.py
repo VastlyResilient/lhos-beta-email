@@ -20,12 +20,12 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'drive_source',return_value=({'name':'x'},raw,{'name':'x'})):
    r=self.app().post('/api/lhos/automation/prepare?dry_run=true',headers={'x-lhos-automation-token':'secret'});self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'would_send_review')
  def test_unapproved_never_sends_at_deadline(self):
-  at9=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);date=at9.strftime('%Y-%m-%d');ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'review_sent','content_valid':True}})
-  with patch.object(ca,'now_et',return_value=at9):
+  at15=ca.now_et().replace(hour=15,minute=0,second=0,microsecond=0);date=at15.strftime('%Y-%m-%d');ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'review_sent','content_valid':True}})
+  with patch.object(ca,'now_et',return_value=at15):
    r=self.app().post('/api/lhos/automation/auto-send?dry_run=true',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(r.json()['action'],'would_notify_not_sent')
- def test_deadline_refuses_before_nine(self):
-  before=ca.now_et().replace(hour=8,minute=59,second=0,microsecond=0)
+ def test_deadline_refuses_before_three(self):
+  before=ca.now_et().replace(hour=14,minute=59,second=0,microsecond=0)
   with patch.object(ca,'now_et',return_value=before):
    r=self.app().post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(r.json()['action'],'too_early')
@@ -38,7 +38,7 @@ class CloudTests(unittest.TestCase):
  def test_unauthorized(self):
   self.assertEqual(self.app().get('/api/lhos/automation/status').status_code,401)
  def test_watchdog_dry_run_never_sends(self):
-  with patch.object(ca,'now_et',return_value=ca.datetime(2030,1,1,10,0,tzinfo=ca.ET)):
+  with patch.object(ca,'now_et',return_value=ca.datetime(2030,1,1,16,0,tzinfo=ca.ET)):
    r=self.app().post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
    self.assertEqual(r.json()['action'],'would_alert_bobby')
  def test_revision_persists_new_draft_and_supersedes_old(self):

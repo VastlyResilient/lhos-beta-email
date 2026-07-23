@@ -3,7 +3,7 @@ name: LHOS Cloud Automation Watchdog
 on:
   schedule:
     # Hourly across the US Eastern morning; backend applies America/New_York gates.
-    - cron: '17 13-18 * * *'
+    - cron: '17 13-20 * * *'
   workflow_dispatch:
 
 concurrency:

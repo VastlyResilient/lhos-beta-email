@@ -338,8 +338,8 @@ async def approval_page(draft_id: str, token: str = ""):
     test_mode = bool(draft.get("test_mode"))
     recipient_label = TEST_RECIPIENT if test_mode else "Active Beta Users (Google Contacts)"
     warning_text = f'TEST MODE: approval sends exactly one email to {TEST_RECIPIENT}.' if test_mode else 'Production approval and revisions are accepted only through authenticated email replies or the verified FFAI bridge. This page is preview-only.'
-    confirm_text = f'Approve this test and send exactly one email to {TEST_RECIPIENT}?' if test_mode else 'Record approval for the validated email to send at 9:00 AM ET?'
-    approve_button_text = '✓ Approve & Send Test' if test_mode else '✓ Approve for 9:00 AM ET'
+    confirm_text = f'Approve this test and send exactly one email to {TEST_RECIPIENT}?' if test_mode else 'Record approval for the validated email to send at 3:00 PM ET?'
+    approve_button_text = '✓ Approve & Send Test' if test_mode else '✓ Approve for 3:00 PM ET'
     revision_recipients = TEST_RECIPIENT if test_mode else 'Kristina, Thomas, and Bobby'
     review_instructions = ('Use the buttons below to approve or revise this isolated Bobby-only test.' if test_mode else 'For identity safety, reply directly to the review email. State approve/send, hold, or the exact revision. Web approval and web editing are disabled for production drafts.')
     action_html = (f'<a href="#" onclick="approveDraft(\'{draft_id}\'); return false;" class="btn btn-approve">{approve_button_text}</a><a href="#" onclick="showEditor(); return false;" class="btn btn-cancel">✏️ Edit Test Email</a>' if test_mode else '<div class="info-card"><strong>Reply to the review email to approve or request revisions.</strong><br>Only an exact authorized sender address can change production state.</div>')
@@ -544,7 +544,7 @@ async def approval_page(draft_id: str, token: str = ""):
             if (resp.ok) {{
               var isApproved = data.status === 'approved';
               var heading = isApproved ? 'Approval Recorded' : 'Test Email Sent Successfully';
-              var detail = isApproved ? 'The validated beta email is scheduled for 9:00 AM Eastern. Any later revision cancels this approval and requires re-review.' : 'The isolated test email was delivered only to the authorized Bobby test inbox.';
+              var detail = isApproved ? 'The validated beta email is scheduled for 3:00 PM Eastern. Any later revision cancels this approval and requires re-review.' : 'The isolated test email was delivered only to the authorized Bobby test inbox.';
               document.body.innerHTML = '<div style="font-family:Nunito,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f8f9fa;"><div style="text-align:center;padding:48px 40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(14,27,51,0.08);max-width:500px;width:90%;"><div style="font-size:48px;margin-bottom:8px;">✅</div><h1 style="color:{BRAND_NAVY};font-size:24px;margin:0 0 8px 0;">' + heading + '</h1><p style="color:#6b7c8d;font-size:15px;margin:8px 0;">' + detail + '</p><p style="color:#a0aec0;font-size:12px;margin-top:24px;">Recorded on ' + new Date().toLocaleString() + '</p></div></div>';
             }} else {{
               alert('Error: ' + (data.detail || 'Unknown error'));
@@ -577,8 +577,8 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
     old_draft = drafts[draft_id]
     if not old_draft.get("test_mode"):
         raise HTTPException(status_code=403, detail="Production revisions must be sent as replies from an authorized approver email or via the FFAI bridge")
-    if not old_draft.get("test_mode") and not (7 <= datetime.now(ET).hour < 9):
-        raise HTTPException(status_code=409, detail="Production revisions are accepted only from 7:00 to 9:00 AM Eastern")
+    if not old_draft.get("test_mode") and not (7 <= datetime.now(ET).hour < 15):
+        raise HTTPException(status_code=409, detail="Production revisions are accepted only from 7:00 AM to 3:00 PM Eastern")
     if old_draft["status"] == "sent":
         raise HTTPException(status_code=400, detail="Cannot edit a draft that is already sent")
 
@@ -706,23 +706,23 @@ def approval_lock():
         finally: fcntl.flock(fh, fcntl.LOCK_UN)
 
 def record_draft_approval(draft_id: str, approver: str):
-    """Record production approval for the 9 AM gate; isolated tests send immediately."""
+    """Record production approval for the 3 PM gate; isolated tests send immediately."""
     with approval_lock():
         drafts = load_drafts()
         if draft_id not in drafts: raise HTTPException(status_code=404, detail="Draft not found")
         draft = drafts[draft_id]
         if draft.get("test_mode"):
             return send_draft_safely(draft_id, approver)
-        if not (7 <= datetime.now(ET).hour < 9):
-            raise HTTPException(status_code=409, detail="Production approvals are accepted only from 7:00 to 9:00 AM Eastern")
+        if not (7 <= datetime.now(ET).hour < 15):
+            raise HTTPException(status_code=409, detail="Production approvals are accepted only from 7:00 AM to 3:00 PM Eastern")
         if draft.get("status") == "sent":
             return {"status":"sent","draft_id":draft_id,"recipient_count":draft.get("recipient_count",0)}
         if draft.get("status") == "revised": raise HTTPException(status_code=409, detail="Draft was superseded")
         if draft.get("status") not in ("pending_approval", "approved"):
             raise HTTPException(status_code=409, detail=f"Draft cannot be approved from status {draft.get('status')}")
-        draft.update({"status":"approved","approved_by":approver,"approved_at":datetime.now(timezone.utc).isoformat(),"scheduled_for":"09:00 America/New_York"})
+        draft.update({"status":"approved","approved_by":approver,"approved_at":datetime.now(timezone.utc).isoformat(),"scheduled_for":"15:00 America/New_York"})
         save_drafts(drafts)
-        return {"status":"approved","draft_id":draft_id,"approved_by":approver,"scheduled_for":"09:00 America/New_York","recipient_count":0}
+        return {"status":"approved","draft_id":draft_id,"approved_by":approver,"scheduled_for":"15:00 America/New_York","recipient_count":0}
 
 def send_draft_safely(draft_id: str, approver: str):
     drafts = load_drafts()

@@ -165,7 +165,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     def make_review(date_display,approval_path,email_html,subtitle="Daily content validated"):
         url=approval_path if approval_path.startswith("http") else public_url + approval_path
         preview=email_html.replace("RECIPIENT_NAME_PLACEHOLDER","Hello Beta Tester!").replace("UNSUB_URL_PLACEHOLDER","#")
-        return f'<html><body><div style="background:#0E1B33;color:white;padding:20px;text-align:center;font-family:Nunito,Arial,sans-serif"><h2>{html.escape(subtitle)}</h2><p>Review the validated email below. Approve, edit, or request changes.</p><a style="display:inline-block;background:#4BC0C4;color:white;padding:14px 30px;text-decoration:none;font-weight:700" href="{url}">Review, Edit, or Approve for 9 AM</a></div>{preview}</body></html>'
+        return f'<html><body><div style="background:#0E1B33;color:white;padding:20px;text-align:center;font-family:Nunito,Arial,sans-serif"><h2>{html.escape(subtitle)}</h2><p>Review the validated email below. Approve, edit, or request changes.</p><a style="display:inline-block;background:#4BC0C4;color:white;padding:14px 30px;text-decoration:none;font-weight:700" href="{url}">Review, Edit, or Approve for 3 PM</a></div>{preview}</body></html>'
     def prepare_from_raw(date_key,date_display,raw,source,token,dry_run=False,subtitle="Daily content validated"):
         ok,reasons=validate_daily_content(raw)
         if not ok:return {"action":"hold","valid":False,"reasons":reasons,"source":source}
@@ -173,7 +173,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         if dry_run:return {"action":"would_send_review","valid":True,"sections":list(sections),"subject":subject,"source":source}
         result=create_draft(subject,email_html,raw,date_display);did=result['draft_id'];review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display}"
         if not gmail_subject_sent_any(token,review_subject,date_key):send_email(token,','.join(approvers),review_subject,make_review(date_display,result.get("approval_url", f"/lhos/approve/{did}"),email_html,subtitle),sender_email,sender_name)
-        st=state_all();_created=now_et();st[date_key]={"date":date_key,"date_display":date_display,"stage":"review_sent","content_valid":True,"draft_id":did,"subject":subject,"review_subject":review_subject,"source":source,"raw_content":raw,"review_sent_at":_created.isoformat(),"deadline":"09:00 America/New_York","updated_at":_created.isoformat()};save_state(st)
+        st=state_all();_created=now_et();st[date_key]={"date":date_key,"date_display":date_display,"stage":"review_sent","content_valid":True,"draft_id":did,"subject":subject,"review_subject":review_subject,"source":source,"raw_content":raw,"review_sent_at":_created.isoformat(),"deadline":"15:00 America/New_York","updated_at":_created.isoformat()};save_state(st)
         return {"action":"review_sent","draft_id":did,"subject":subject}
     def prepare_impl(dry_run=False,force=False):
         date_key,date_display=current()
@@ -199,7 +199,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         kind=classify_instruction(text);st=state_all();drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
         if not draft:return {"action":"draft_missing","kind":kind}
         if kind=="approve":
-            result=approve_draft(state["draft_id"],f"{actor} via {channel}");state.update({"stage":"approved","approved_by":actor,"approval_channel":channel,"approval_text":text[:1000],"approved_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"approval_recorded","scheduled_for":"09:00 America/New_York","draft_id":state["draft_id"],"actor":actor,**result}
+            result=approve_draft(state["draft_id"],f"{actor} via {channel}");state.update({"stage":"approved","approved_by":actor,"approval_channel":channel,"approval_text":text[:1000],"approved_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"approval_recorded","scheduled_for":"15:00 America/New_York","draft_id":state["draft_id"],"actor":actor,**result}
         if kind=="hold":
             draft.update({"status":"pending_approval","approved_by":None,"approved_at":None});save_drafts(drafts);state.update({"stage":"review_sent","approved_by":None,"approval_channel":None,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"send_held","draft_id":state["draft_id"],"actor":actor}
         if kind=="ambiguous":return {"action":"clarification_needed","draft_id":state["draft_id"],"actor":actor}
@@ -215,12 +215,12 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     @router.post("/prepare")
     async def prepare(req:Request,dry_run:bool=False):
         auth(req)
-        if not dry_run and not (7 <= now_et().hour < 9):return {"action":"outside_active_window","window":"07:00-09:00 America/New_York"}
+        if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
         with automation_lock(): return prepare_impl(dry_run=dry_run)
     @router.post("/check-replies")
     async def check_replies(req:Request,dry_run:bool=False):
         auth(req)
-        if not dry_run and not (7 <= now_et().hour < 9):return {"action":"outside_active_window","window":"07:00-09:00 America/New_York"}
+        if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
         with automation_lock():
             auth(req);date_key,date_display=current();st=state_all();state=st.get(date_key)
             if not state:return {"action":"no_state"}
@@ -259,7 +259,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     @router.post("/decision")
     async def decision(req:Request,dry_run:bool=False):
         auth(req)
-        if not dry_run and not (7 <= now_et().hour < 9):return {"action":"outside_active_window","window":"07:00-09:00 America/New_York"}
+        if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
         with automation_lock():
             payload=await req.json();actor=str(payload.get("actor","")).strip();text=str(payload.get("text","")).strip();channel=str(payload.get("channel","imessage")).strip();message_id=str(payload.get("message_id","")).strip()
             if actor not in ("Kristina","Thomas Appling","Bobby"):raise HTTPException(status_code=403,detail="Actor is not an authorized approver")
@@ -284,15 +284,15 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         subject=f"[NOT SENT] LifeHouse OS beta update - {date_display}"
         if dry_run:return {"action":"would_notify_not_sent","reason":reason,"stage":state.get("stage") if state else None}
         if not gmail_subject_sent_any(token,subject,date_key):
-            body=f"<p>Hi Kristina,</p><p>Today's LifeHouse OS beta email was <strong>not sent</strong> at 9:00 AM Eastern.</p><p>{html.escape(reason)}</p><p>No beta tester received an email.</p><p>Warm regards,<br>Iris</p>";send_email(token,KRISTINA,subject,body,sender_email,sender_name)
+            body=f"<p>Hi Kristina,</p><p>Today's LifeHouse OS beta email was <strong>not sent</strong> at 3:00 PM Eastern.</p><p>{html.escape(reason)}</p><p>No beta tester received an email.</p><p>Warm regards,<br>Iris</p>";send_email(token,KRISTINA,subject,body,sender_email,sender_name)
         st=state_all();base=state or {"date":date_key,"date_display":date_display,"content_valid":False};base.update({"stage":"not_sent","not_sent_reason":reason,"not_sent_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=base;save_state(st);return {"action":"not_sent","reason":reason}
     @router.post("/auto-send")
     async def auto_send(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            if now_et().hour < 9:return {"action":"too_early","scheduled_for":"09:00 America/New_York"}
+            if now_et().hour < 15:return {"action":"too_early","scheduled_for":"15:00 America/New_York"}
             date_key,date_display=current();st=state_all();state=st.get(date_key);token=get_token()
-            if not state:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 9:00 AM deadline.",token,dry_run)
+            if not state:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",token,dry_run)
             drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
             if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
             if draft.get('status')=='approved' and state.get('content_valid'):
@@ -311,7 +311,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
             if draft.get("status")=="sent":
                 state["stage"]="sent";state["updated_at"]=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
-            # Reconcile only a batch already authorized before the 9 AM gate.
+            # Reconcile only a batch already authorized before the 3 PM gate.
             authorized=bool(draft.get("approved_by")) and draft.get("status") in ("sending","partial","approved")
             if not authorized:return {"action":"no_op","stage":state.get("stage"),"draft_status":draft.get("status")}
             if dry_run:return {"action":"would_reconcile","draft_id":state.get("draft_id"),"draft_status":draft.get("status")}
@@ -321,12 +321,12 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         auth(req)
         with automation_lock():
             date_key,date_display=current();now=now_et();state=state_all().get(date_key);reason=None
-            if now.hour < 9:return {"action":"too_early","time":now.isoformat()}
-            if not state:reason="No cloud automation state exists after 9:00 AM ET; the preparation schedule may have been missed."
+            if now.hour < 15:return {"action":"too_early","time":now.isoformat()}
+            if not state:reason="No cloud automation state exists after 3:00 PM ET; the preparation schedule may have been missed."
             elif state.get("stage") in ("sending","partial","approved"):
                 reason=f"Authorized batch is stuck in {state.get('stage')} and requires reconciliation."
             elif state.get("stage") in ("review_sent","hold"):
-                reason=f"The 9:00 AM deadline handler did not finalize stage {state.get('stage')}."
+                reason=f"The 3:00 PM deadline handler did not finalize stage {state.get('stage')}."
             if not reason:return {"action":"healthy_or_expected_terminal_state","stage":state.get("stage") if state else None}
             key=hashlib.sha256((date_key+reason).encode()).hexdigest();alerts=load(ALERTS_FILE,{})
             if alerts.get(key):return {"action":"alert_already_sent","reason":reason}
