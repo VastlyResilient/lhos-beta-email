@@ -27,4 +27,11 @@ class BridgeTests(unittest.TestCase):
   self.assertEqual(r['action'],'would_send');self.assertTrue(r['text'].endswith(b.SIGN))
   day=b.dt.datetime.now(b.ET).strftime('%Y-%m-%d');key=hashlib.sha256((day+b.CHAT_GUID+r['text']).encode()).hexdigest();s['sent_hashes']=[key]
   with patch.object(b,'verify',return_value=True):self.assertEqual(b.send_group('notice',s,True)['action'],'duplicate_suppressed')
+ def test_live_send_blocked_outside_window(self):
+  outside=b.dt.datetime.now(b.ET).replace(hour=3,minute=0)
+  class Fixed(b.dt.datetime):
+   @classmethod
+   def now(cls,tz=None):return outside
+  with patch.object(b.dt,'datetime',Fixed):
+   with self.assertRaises(RuntimeError):b.send_group('notice',{'sent_hashes':[],'send_attempts':{},'outbound_guids':[]},False)
 if __name__=='__main__':unittest.main()

@@ -142,7 +142,7 @@ def get_google_access_token() -> str:
     """Refresh and return a valid Google access token using the refresh token."""
     if not GOOGLE_REFRESH_TOKEN or not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google credentials not configured.")
-    
+
     resp = httpx.post(
         "https://oauth2.googleapis.com/token",
         data={
@@ -186,7 +186,7 @@ def get_contact_group_id(access_token: str, group_name: str) -> Optional[str]:
     )
     if resp.status_code != 200:
         raise HTTPException(status_code=500, detail=f"Failed to list contact groups: {resp.text}")
-    
+
     groups = resp.json().get("contactGroups", [])
     for g in groups:
         if g.get("name", "").lower() == group_name.lower():
@@ -203,9 +203,9 @@ def get_contacts_in_group(access_token: str, group_resource_name: str) -> list:
     )
     if resp.status_code != 200:
         raise HTTPException(status_code=500, detail=f"Failed to get contact group: {resp.text}")
-    
+
     member_resource_names = resp.json().get("memberResourceNames", [])
-    
+
     contacts = []
     for resource_name in member_resource_names:
         person_resp = httpx.get(
@@ -222,7 +222,7 @@ def get_contacts_in_group(access_token: str, group_resource_name: str) -> list:
             email_list = [e["value"] for e in emails if "value" in e]
             if email_list:
                 contacts.append({"name": name, "email": email_list[0]})
-    
+
     return contacts
 
 def send_gmail(access_token: str, to: str, subject: str, html_body: str, sender_email: str, sender_name: str, reply_to: str | None = None):
@@ -233,19 +233,19 @@ def send_gmail(access_token: str, to: str, subject: str, html_body: str, sender_
     message["From"] = f'"{sender_name}" <{sender_email}>'
     if reply_to:
         message["Reply-To"] = reply_to
-    
+
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    
+
     resp = httpx.post(
         "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
         headers={"Authorization": f"Bearer {access_token}"},
         json={"raw": raw},
         timeout=60,
     )
-    
+
     if resp.status_code not in (200, 201):
         raise Exception(f"Gmail send failed for {to}: {resp.status_code} {resp.text}")
-    
+
     return resp.json()
 
 # ---------------------------------------------------------------------------
@@ -333,7 +333,7 @@ async def approval_page(draft_id: str, token: str = ""):
     drafts = load_drafts()
     if draft_id not in drafts:
         return HTMLResponse(content="<h1>Draft not found</h1>", status_code=404)
-    
+
     draft = drafts[draft_id]
     test_mode = bool(draft.get("test_mode"))
     recipient_label = TEST_RECIPIENT if test_mode else "Active Beta Users (Google Contacts)"
@@ -343,7 +343,7 @@ async def approval_page(draft_id: str, token: str = ""):
     revision_recipients = TEST_RECIPIENT if test_mode else 'Kristina, Thomas, and Bobby'
     review_instructions = ('Use the buttons below to approve or revise this isolated Bobby-only test.' if test_mode else 'For identity safety, reply directly to the review email. State approve/send, hold, or the exact revision. Web approval and web editing are disabled for production drafts.')
     action_html = (f'<a href="#" onclick="approveDraft(\'{draft_id}\'); return false;" class="btn btn-approve">{approve_button_text}</a><a href="#" onclick="showEditor(); return false;" class="btn btn-cancel">✏️ Edit Test Email</a>' if test_mode else '<div class="info-card"><strong>Reply to the review email to approve or request revisions.</strong><br>Only an exact authorized sender address can change production state.</div>')
-    
+
     if draft["status"] == "sent":
         approver = draft.get("approved_by", "someone")
         count = draft.get("recipient_count", 0)
@@ -364,7 +364,7 @@ async def approval_page(draft_id: str, token: str = ""):
         </div>
         </body></html>
         """)
-    
+
     if draft["status"] == "approved":
         return HTMLResponse(content=f"""
         <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -381,7 +381,7 @@ async def approval_page(draft_id: str, token: str = ""):
         </div>
         </body></html>
         """)
-    
+
     return HTMLResponse(content=f"""
     <html>
     <head>
@@ -424,29 +424,29 @@ async def approval_page(draft_id: str, token: str = ""):
           <div class="info-row"><span class="info-label">Status</span><span class="info-value">Pending Approval</span></div>
           <div class="info-row"><span class="info-label">Recipients</span><span class="info-value">{recipient_label}</span></div>
         </div>
-        
+
         <div class="info-card" style="border-left:4px solid {BRAND_AQUA};">
           <h2>How to Review This Email</h2>
           <p style="font-size:14px; color:#2c3e50; line-height:1.8;">
 {review_instructions}
           </p>
         </div>
-        
+
         <div class="warning">
           ⚠️ {warning_text}
         </div>
-        
+
         <div class="preview">
           <div class="preview-header">📧 Email Preview</div>
           <div class="preview-body">
             {render_preview_html(draft["html_body"])}
           </div>
         </div>
-        
+
         <div class="actions">
           {action_html}
         </div>
-        
+
         <!-- Edit Mode (hidden by default) -->
         <div id="editSection" style="display:none; margin-top:20px;">
           <div class="info-card" style="padding:20px;">
@@ -466,7 +466,7 @@ async def approval_page(draft_id: str, token: str = ""):
           </div>
         </div>
       </div>
-      
+
       <script>
         // Store original draft ID for reference
         var currentDraftId = '{draft_id}';
@@ -487,16 +487,16 @@ async def approval_page(draft_id: str, token: str = ""):
             sourceMode = false;
           }}
         }}
-        
+
         function showEditor() {{
           document.getElementById('editSection').style.display = 'block';
           document.getElementById('editSection').scrollIntoView({{ behavior: 'smooth' }});
         }}
-        
+
         function cancelEdit() {{
           document.getElementById('editSection').style.display = 'none';
         }}
-        
+
         async function submitChanges(id) {{
           var subject = document.getElementById('editSubject').value;
           var html = sourceMode ? document.getElementById('editHtml').value : document.getElementById('visualEditor').innerHTML;
@@ -528,7 +528,7 @@ async def approval_page(draft_id: str, token: str = ""):
             btn.style.opacity = '1';
           }}
         }}
-        
+
         async function approveDraft(id) {{
           if (!confirm('{confirm_text}')) return;
           const btn = event.target;
@@ -573,7 +573,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
     drafts = load_drafts()
     if draft_id not in drafts:
         raise HTTPException(status_code=404, detail="Draft not found")
-    
+
     old_draft = drafts[draft_id]
     if not old_draft.get("test_mode"):
         raise HTTPException(status_code=403, detail="Production revisions must be sent as replies from an authorized approver email or via the FFAI bridge")
@@ -581,7 +581,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
         raise HTTPException(status_code=409, detail="Production revisions are accepted only from 7:00 to 9:00 AM Eastern")
     if old_draft["status"] == "sent":
         raise HTTPException(status_code=400, detail="Cannot edit a draft that is already sent")
-    
+
     # HARD GUARD: Block edit if any draft for this date was already sent
     draft_date = old_draft.get("date", "")
     for other_id, other_draft in drafts.items():
@@ -590,12 +590,12 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
                 status_code=409,
                 detail=f"Emails for {draft_date} have already been sent. Cannot create revised draft."
             )
-    
+
     # Mark old draft as revised
     old_draft["status"] = "revised"
     old_draft["revised_at"] = datetime.now(timezone.utc).isoformat()
     save_drafts(drafts)
-    
+
     # Sanitize editor HTML and restore per-recipient personalization placeholders
     # (the visual editor displays preview values; real sends must keep placeholders).
     clean_html = restore_placeholders(strip_unsafe(edit.html_body))
@@ -633,12 +633,12 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
                 state.update({"stage":"review_sent","draft_id":new_draft_id,"review_subject":review_subject,"raw_content":plain,"approved_by":None,"approval_channel":None,"updated_at":datetime.now(timezone.utc).isoformat()})
                 states[state_date] = state
         atomic_json_write(AUTOMATION_STATE_FILE, states)
-    
+
     # Send the revised draft to approvers via Gmail
     try:
         access_token = get_google_access_token()
         approval_url = f"/lhos/approve/{new_draft_id}?token={approval_token(new_draft_id)}"
-        
+
         # Build approver email with "revised" banner
         approver_html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -656,7 +656,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
 </td></tr></table></div>
 {render_preview_html(clean_html)}
 </body></html>"""
-        
+
         approver_emails = old_draft.get("test_recipient") if old_draft.get("test_mode") else ",".join(APPROVERS)
         try:
             sent = send_gmail(
@@ -693,7 +693,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not build the re-review email: {e}")
-    
+
     return {"status": "revised", "old_draft_id": draft_id, "new_draft_id": new_draft_id, "approval_token": approval_token(new_draft_id), "review_to": approver_emails, "review_message_id": (sent or {}).get("id")}
 
 

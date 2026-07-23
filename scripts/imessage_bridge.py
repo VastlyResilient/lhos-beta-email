@@ -39,7 +39,9 @@ def decide(actor,text,guid,dry=False):
  r=httpx.post(API+'/api/lhos/automation/decision',headers=headers(),params={'dry_run':str(dry).lower()},json={'actor':actor,'text':text,'message_id':guid,'channel':'imessage'},timeout=180);r.raise_for_status();return r.json()
 def signed(t):return t.strip() if t.strip().endswith(SIGN) else t.strip()+'\n\n'+SIGN
 def send_group(text,s,dry=False):
- verify();text=signed(text);day=dt.datetime.now(ET).strftime('%Y-%m-%d');key=hashlib.sha256((day+CHAT_GUID+text).encode()).hexdigest();s.setdefault('send_attempts',{})
+ now=dt.datetime.now(ET)
+ if not dry and not (7<=now.hour<9 or (now.hour==9 and now.minute<15)):raise RuntimeError('FFAI send blocked outside 07:00-09:15 Eastern')
+ verify();text=signed(text);day=now.strftime('%Y-%m-%d');key=hashlib.sha256((day+CHAT_GUID+text).encode()).hexdigest();s.setdefault('send_attempts',{})
  if key in s['sent_hashes']:return {'action':'duplicate_suppressed'}
  if s['send_attempts'].get(key,{}).get('status')=='UNCERTAIN':return {'action':'uncertain_send_blocked'}
  if dry:return {'action':'would_send','text':text}
