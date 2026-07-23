@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import cloud_automation as ca
 class CloudTests(unittest.TestCase):
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
+  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
  def tearDown(self):self.t.cleanup()
  def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called'))):
   app=FastAPI(); drafts={}

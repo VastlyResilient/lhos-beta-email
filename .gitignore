@@ -6,3 +6,5 @@ __pycache__/
 !railway.json
 
 .automation_token
+n8n-lhos-production-workflow.json
+.approval_secret

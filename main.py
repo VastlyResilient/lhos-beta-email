@@ -13,6 +13,9 @@ import json
 import os
 import uuid
 import base64
+import hashlib
+import hmac
+import secrets
 import html
 from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
@@ -37,6 +40,8 @@ SENDER_EMAIL = os.getenv("LHOS_SENDER_EMAIL", "iris@lifehouseos.com")
 SENDER_NAME = os.getenv("LHOS_SENDER_NAME", "LifeHouse OS")
 FEEDBACK_LINK = os.getenv("LHOS_FEEDBACK_LINK", "https://lifehouseos.app/feedback")
 UNSUBSCRIBE_BASE_URL = os.getenv("UNSUBSCRIBE_BASE_URL", "https://lhos-unsubscribe-production.up.railway.app")
+AUTOMATION_TOKEN = os.getenv("LHOS_AUTOMATION_TOKEN", "")
+APPROVAL_SECRET = os.getenv("LHOS_APPROVAL_SECRET", "")
 SUPPRESSION_LIST_URL = "https://raw.githubusercontent.com/VastlyResilient/lhos-unsubscribe-data/main/suppression_list.json"
 
 
@@ -222,6 +227,19 @@ class DraftCreate(BaseModel):
     text_body: str = ""
     date: str = ""
 
+def require_automation(request: Request):
+    supplied = request.headers.get("x-lhos-automation-token", "")
+    if not AUTOMATION_TOKEN or not hmac.compare_digest(supplied, AUTOMATION_TOKEN):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+def approval_token(draft_id: str) -> str:
+    if not APPROVAL_SECRET: raise HTTPException(status_code=503, detail="Approval signing not configured")
+    return hmac.new(APPROVAL_SECRET.encode(), draft_id.encode(), hashlib.sha256).hexdigest()
+
+def verify_approval(draft_id: str, token: str):
+    if not token or not hmac.compare_digest(token, approval_token(draft_id)):
+        raise HTTPException(status_code=401, detail="Invalid or missing approval token")
+
 @app.get("/")
 async def root():
     return {"service": "LifeHouse OS Beta Email", "status": "running"}
@@ -231,16 +249,18 @@ def create_draft_record(subject: str, html_body: str, text_body: str, date_value
     drafts = load_drafts()
     drafts[draft_id] = {"id":draft_id,"subject":subject,"html_body":html_body,"text_body":text_body,"date":date_value or datetime.now(timezone.utc).strftime("%Y-%m-%d"),"status":"pending_approval","created_at":datetime.now(timezone.utc).isoformat(),"approved_by":None,"approved_at":None,"sent_at":None,"recipient_count":0,"send_errors":[]}
     save_drafts(drafts)
-    return {"draft_id":draft_id,"approval_url":f"/lhos/approve/{draft_id}","status":"pending_approval"}
+    return {"draft_id":draft_id,"approval_url":f"/lhos/approve/{draft_id}?token={approval_token(draft_id)}","status":"pending_approval"}
 
 @app.post("/api/lhos/drafts")
-async def create_draft(draft: DraftCreate):
+async def create_draft(draft: DraftCreate, request: Request):
     """Register a new draft for approval."""
+    require_automation(request)
     return create_draft_record(draft.subject,draft.html_body,draft.text_body,draft.date)
 
 @app.get("/api/lhos/drafts")
-async def list_drafts():
+async def list_drafts(request: Request):
     """List all drafts."""
+    require_automation(request)
     drafts = load_drafts()
     summary = []
     for d in drafts.values():
@@ -256,16 +276,18 @@ async def list_drafts():
     return summary
 
 @app.get("/api/lhos/drafts/{draft_id}")
-async def get_draft(draft_id: str):
+async def get_draft(draft_id: str, request: Request):
     """Get full draft details."""
+    require_automation(request)
     drafts = load_drafts()
     if draft_id not in drafts:
         raise HTTPException(status_code=404, detail="Draft not found")
     return drafts[draft_id]
 
 @app.get("/lhos/approve/{draft_id}", response_class=HTMLResponse)
-async def approval_page(draft_id: str):
+async def approval_page(draft_id: str, token: str = ""):
     """Show the approval page with draft preview."""
+    verify_approval(draft_id, token)
     drafts = load_drafts()
     if draft_id not in drafts:
         return HTMLResponse(content="<h1>Draft not found</h1>", status_code=404)
@@ -412,7 +434,7 @@ async def approval_page(draft_id: str):
           btn.textContent = 'Submitting...';
           btn.style.opacity = '0.6';
           try {{
-            var resp = await fetch('/api/lhos/drafts/' + id + '/edit', {{
+            var resp = await fetch('/api/lhos/drafts/' + id + '/edit?token={token}', {{
               method: 'POST',
               headers: {{'Content-Type': 'application/json'}},
               body: JSON.stringify({{ subject: subject, html_body: html }})
@@ -438,7 +460,7 @@ async def approval_page(draft_id: str):
           btn.textContent = 'Sending...';
           btn.style.opacity = '0.6';
           try {{
-            const resp = await fetch('/api/lhos/approve/' + id, {{
+            const resp = await fetch('/api/lhos/approve/' + id + '?token={token}', {{
               method: 'POST',
               headers: {{'Content-Type': 'application/json'}},
               body: JSON.stringify({{}})
@@ -469,8 +491,9 @@ class DraftEdit(BaseModel):
     html_body: str
 
 @app.post("/api/lhos/drafts/{draft_id}/edit")
-async def edit_draft(draft_id: str, edit: DraftEdit):
+async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
     """Save edited draft, mark old one as revised, create new pending draft, and email approvers."""
+    verify_approval(draft_id, token)
     drafts = load_drafts()
     if draft_id not in drafts:
         raise HTTPException(status_code=404, detail="Draft not found")
@@ -494,7 +517,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit):
     save_drafts(drafts)
     
     # Create new draft with the edited content
-    new_draft_id = str(uuid.uuid4())[:8]
+    new_draft_id = uuid.uuid4().hex
     drafts = load_drafts()
     drafts[new_draft_id] = {
         "id": new_draft_id,
@@ -516,7 +539,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit):
     # Send the revised draft to approvers via Gmail
     try:
         access_token = get_google_access_token()
-        approval_url = f"/lhos/approve/{new_draft_id}"
+        approval_url = f"/lhos/approve/{new_draft_id}?token={approval_token(new_draft_id)}"
         
         # Build approver email with "revised" banner
         approver_html = f"""<!DOCTYPE html>
@@ -545,7 +568,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit):
         # Draft was created but email failed - still return success for the draft
         pass
     
-    return {"status": "revised", "old_draft_id": draft_id, "new_draft_id": new_draft_id}
+    return {"status": "revised", "old_draft_id": draft_id, "new_draft_id": new_draft_id, "approval_token": approval_token(new_draft_id)}
 
 
 def send_draft_safely(draft_id: str, approver: str):
@@ -579,7 +602,9 @@ def send_draft_safely(draft_id: str, approver: str):
     return {"status":draft["status"],"draft_id":draft_id,"recipient_count":result["delivered_count"],"total_recipients":len(contacts),"skipped_unsubscribed":result["suppressed_count"],"newly_sent_count":result["newly_sent_count"],"errors":result["errors"]}
 
 @app.post("/api/lhos/approve/{draft_id}")
-async def approve_and_send(draft_id: str, request: Request):
+async def approve_and_send(draft_id: str, request: Request, token: str = ""):
+    if not (AUTOMATION_TOKEN and hmac.compare_digest(request.headers.get("x-lhos-automation-token", ""), AUTOMATION_TOKEN)):
+        verify_approval(draft_id, token)
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     return send_draft_safely(draft_id, body.get("approver", "unknown"))
 
@@ -601,8 +626,9 @@ app.include_router(configure_router(
 ))
 
 @app.get("/api/lhos/log")
-async def get_send_log():
+async def get_send_log(request: Request):
     """Get the send log."""
+    require_automation(request)
     return load_log()
 
 @app.get("/health")

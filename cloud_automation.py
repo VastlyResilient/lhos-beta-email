@@ -1,5 +1,6 @@
 """Cloud orchestration endpoints invoked by n8n. All actions are fail-closed and idempotent."""
-import base64, hashlib, html, hmac, json, os, re, tempfile, zipfile
+import base64, hashlib, html, hmac, json, os, re, tempfile, zipfile, fcntl
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from email import message_from_bytes
 from email.header import decode_header, make_header
@@ -19,7 +20,7 @@ AUTOMATION_TOKEN=os.getenv("LHOS_AUTOMATION_TOKEN","")
 END_DATE=os.getenv("LHOS_END_DATE","").strip()
 GLM_API_KEY=os.getenv("GLM_API_KEY","")
 GLM_BASE_URL=os.getenv("GLM_BASE_URL","https://api.z.ai/api/paas/v4")
-DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json"
+DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
 KRISTINA="kristina@freedomforgeai.com"
 APPROVAL_WORDS=("approved","approve","looks good","send it","go ahead","lgtm","ship it")
 
@@ -28,6 +29,13 @@ def now_et(): return datetime.now(ET)
 def load(path,default):
     try:return json.loads(path.read_text())
     except Exception:return default
+
+@contextmanager
+def automation_lock():
+    AUTOMATION_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(AUTOMATION_LOCK, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
 
 def auth(req:Request):
     if not AUTOMATION_TOKEN: raise HTTPException(503,"Automation token not configured")
@@ -144,8 +152,8 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     def save_state(d):atomic_json_write(STATE_FILE,d)
     def current():
         now=now_et();return now.strftime("%Y-%m-%d"),now.strftime("%B %d, %Y")
-    def make_review(date_display,draft_id,email_html,subtitle="Daily content validated"):
-        url=f"{public_url}/lhos/approve/{draft_id}"
+    def make_review(date_display,approval_path,email_html,subtitle="Daily content validated"):
+        url=approval_path if approval_path.startswith("http") else public_url + approval_path
         preview=email_html.replace("RECIPIENT_NAME_PLACEHOLDER","Hello Beta Tester!").replace("UNSUB_URL_PLACEHOLDER","#")
         return f'<html><body><div style="background:#0E1B33;color:white;padding:20px;text-align:center;font-family:Nunito,Arial,sans-serif"><h2>{html.escape(subtitle)}</h2><p>Review the validated email below. Approve, edit, or request changes.</p><a style="display:inline-block;background:#4BC0C4;color:white;padding:14px 30px;text-decoration:none;font-weight:700" href="{url}">Review, Edit, Approve &amp; Send</a></div>{preview}</body></html>'
     def prepare_from_raw(date_key,date_display,raw,source,token,dry_run=False,subtitle="Daily content validated"):
@@ -154,7 +162,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         sections=deterministic_sections(raw);email_html=build_beta_email(sections,date_display);subject=f"LifeHouse OS Beta Update - {date_display}"
         if dry_run:return {"action":"would_send_review","valid":True,"sections":list(sections),"subject":subject,"source":source}
         result=create_draft(subject,email_html,raw,date_display);did=result['draft_id'];review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display}"
-        if not gmail_subject_sent_any(token,review_subject,date_key):send_email(token,','.join(approvers),review_subject,make_review(date_display,did,email_html,subtitle),sender_email,sender_name)
+        if not gmail_subject_sent_any(token,review_subject,date_key):send_email(token,','.join(approvers),review_subject,make_review(date_display,result.get("approval_url", f"/lhos/approve/{did}"),email_html,subtitle),sender_email,sender_name)
         st=state_all();st[date_key]={"date":date_key,"date_display":date_display,"stage":"review_sent","content_valid":True,"draft_id":did,"subject":subject,"review_subject":review_subject,"source":source,"raw_content":raw,"updated_at":now_et().isoformat()};save_state(st)
         return {"action":"review_sent","draft_id":did,"subject":subject}
     def prepare_impl(dry_run=False,force=False):
@@ -181,53 +189,73 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def status(req:Request):
         auth(req);date_key,_=current();return {"date":date_key,"state":state_all().get(date_key),"persistent_data":str(DATA_DIR),"end_date":END_DATE or None}
     @router.post("/prepare")
-    async def prepare(req:Request,dry_run:bool=False):auth(req);return prepare_impl(dry_run=dry_run)
+    async def prepare(req:Request,dry_run:bool=False):
+        auth(req)
+        with automation_lock(): return prepare_impl(dry_run=dry_run)
     @router.post("/check-replies")
     async def check_replies(req:Request,dry_run:bool=False):
-        auth(req);date_key,date_display=current();st=state_all();state=st.get(date_key)
-        if not state:return {"action":"no_state"}
-        token=get_token();processed=set(load(PROCESSED_FILE,[]))
-        if state.get('stage')=='hold':
-            subj=state.get('action_subject',f"[ACTION REQUIRED] LifeHouse OS content needed - {date_display}")
-            msgs=gmail_search(token,f'subject:"{subj}" after:{date_key.replace("-","/")}',50)
-            for item in msgs:
-                if item['id'] in processed:continue
-                msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=h.get('from','').lower()
-                if 'kristina' not in frm:continue
-                body=clean_reply(extract_gmail_body(msg.get('payload',{})))
-                if dry_run:return {"action":"would_process_kristina_reply","message_id":item['id'],"chars":len(body)}
-                if re.search(r'\b(updated|uploaded|ready|revised|fixed)\b',body,re.I) and len(body)<500:
-                    result=prepare_impl(force=True)
-                else:
-                    result=prepare_from_raw(date_key,date_display,body,{"type":"kristina_reply","message_id":item['id']},token,False,"Updated content received from Kristina")
-                processed.add(item['id']);atomic_json_write(PROCESSED_FILE,sorted(processed));return result
-            return {"action":"no_reply","stage":"hold"}
-        if state.get('stage')=='review_sent':
-            drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
-            if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
-            msgs=gmail_search(token,f'subject:"{state.get("review_subject")}" after:{date_key.replace("-","/")}',50)
-            for item in msgs:
-                if item['id'] in processed:continue
-                msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=h.get('from','').lower()
-                if not any(a.lower() in frm for a in approvers):continue
-                body=clean_reply(extract_gmail_body(msg.get('payload',{})));low=body.lower()
-                if dry_run:return {"action":"would_approve" if any(x in low for x in APPROVAL_WORDS) else "would_apply_changes","message_id":item['id']}
-                if any(x in low for x in APPROVAL_WORDS):
-                    result=send_draft(state['draft_id'],frm);state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st)
-                else:
-                    revised=revise_with_glm(state['raw_content'],body);sections=deterministic_sections(revised);email_html=build_beta_email(sections,date_display);subject=state['subject'];new=create_draft(subject,email_html,revised,date_display);old=drafts.get(state['draft_id']);
-                    if old:old['status']='revised';save_drafts(drafts)
-                    did=new['draft_id'];review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Revised)";send_email(token,','.join(approvers),review_subject,make_review(date_display,did,email_html,"Requested changes applied"),sender_email,sender_name);state.update({"stage":"review_sent","draft_id":did,"review_subject":review_subject,"raw_content":revised,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);result={"action":"revised_review_sent","draft_id":did}
-                processed.add(item['id']);atomic_json_write(PROCESSED_FILE,sorted(processed));return result
-            return {"action":"no_reply","stage":"review_sent"}
-        return {"action":"no_op","stage":state.get('stage')}
+        auth(req)
+        with automation_lock():
+            auth(req);date_key,date_display=current();st=state_all();state=st.get(date_key)
+            if not state:return {"action":"no_state"}
+            token=get_token();processed=set(load(PROCESSED_FILE,[]))
+            if state.get('stage')=='hold':
+                subj=state.get('action_subject',f"[ACTION REQUIRED] LifeHouse OS content needed - {date_display}")
+                msgs=gmail_search(token,f'subject:"{subj}" after:{date_key.replace("-","/")}',50)
+                for item in msgs:
+                    if item['id'] in processed:continue
+                    msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=h.get('from','').lower()
+                    if 'kristina' not in frm:continue
+                    body=clean_reply(extract_gmail_body(msg.get('payload',{})))
+                    if dry_run:return {"action":"would_process_kristina_reply","message_id":item['id'],"chars":len(body)}
+                    if re.search(r'\b(updated|uploaded|ready|revised|fixed)\b',body,re.I) and len(body)<500:
+                        result=prepare_impl(force=True)
+                    else:
+                        result=prepare_from_raw(date_key,date_display,body,{"type":"kristina_reply","message_id":item['id']},token,False,"Updated content received from Kristina")
+                    processed.add(item['id']);atomic_json_write(PROCESSED_FILE,sorted(processed));return result
+                return {"action":"no_reply","stage":"hold"}
+            if state.get('stage')=='review_sent':
+                drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
+                if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
+                msgs=gmail_search(token,f'subject:"{state.get("review_subject")}" after:{date_key.replace("-","/")}',50)
+                for item in msgs:
+                    if item['id'] in processed:continue
+                    msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=h.get('from','').lower()
+                    if not any(a.lower() in frm for a in approvers):continue
+                    body=clean_reply(extract_gmail_body(msg.get('payload',{})));low=body.lower()
+                    if dry_run:return {"action":"would_approve" if any(x in low for x in APPROVAL_WORDS) else "would_apply_changes","message_id":item['id']}
+                    if any(x in low for x in APPROVAL_WORDS):
+                        result=send_draft(state['draft_id'],frm);state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st)
+                    else:
+                        revised=revise_with_glm(state['raw_content'],body);sections=deterministic_sections(revised);email_html=build_beta_email(sections,date_display);subject=state['subject'];new=create_draft(subject,email_html,revised,date_display);old=drafts.get(state['draft_id']);
+                        if old:old['status']='revised';save_drafts(drafts)
+                        did=new['draft_id'];review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Revised)";send_email(token,','.join(approvers),review_subject,make_review(date_display,new.get("approval_url", f"/lhos/approve/{did}"),email_html,"Requested changes applied"),sender_email,sender_name);state.update({"stage":"review_sent","draft_id":did,"review_subject":review_subject,"raw_content":revised,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);result={"action":"revised_review_sent","draft_id":did}
+                    processed.add(item['id']);atomic_json_write(PROCESSED_FILE,sorted(processed));return result
+                return {"action":"no_reply","stage":"review_sent"}
+            return {"action":"no_op","stage":state.get('stage')}
     @router.post("/auto-send")
     async def auto_send(req:Request,dry_run:bool=False):
-        auth(req);date_key,_=current();st=state_all();state=st.get(date_key)
-        if not state:return {"action":"no_state"}
-        if state.get('stage')!='review_sent' or not state.get('content_valid'):return {"action":"blocked","stage":state.get('stage'),"content_valid":state.get('content_valid')}
-        drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
-        if draft.get('status')=='sent':state['stage']='sent';st[date_key]=state;save_state(st);return {"action":"already_sent"}
-        if dry_run:return {"action":"would_auto_send","draft_id":state.get('draft_id')}
-        result=send_draft(state['draft_id'],'auto-send@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return result
+        auth(req)
+        with automation_lock():
+            date_key,_=current();st=state_all();state=st.get(date_key)
+            if not state:return {"action":"no_state"}
+            if state.get('stage')!='review_sent' or not state.get('content_valid'):return {"action":"blocked","stage":state.get('stage'),"content_valid":state.get('content_valid')}
+            drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
+            if draft.get('status')=='sent':state['stage']='sent';st[date_key]=state;save_state(st);return {"action":"already_sent"}
+            if dry_run:return {"action":"would_auto_send","draft_id":state.get('draft_id')}
+            result=send_draft(state['draft_id'],'auto-send@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return result
+    @router.post("/reconcile")
+    async def reconcile(req:Request,dry_run:bool=False):
+        auth(req)
+        with automation_lock():
+            date_key,_=current();st=state_all();state=st.get(date_key)
+            if not state:return {"action":"no_state"}
+            drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
+            if draft.get("status")=="sent":
+                state["stage"]="sent";state["updated_at"]=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
+            # Reconcile only a batch already authorized by approval or the 8 AM auto-send.
+            authorized=bool(draft.get("approved_by")) and draft.get("status") in ("sending","partial","approved")
+            if not authorized:return {"action":"no_op","stage":state.get("stage"),"draft_status":draft.get("status")}
+            if dry_run:return {"action":"would_reconcile","draft_id":state.get("draft_id"),"draft_status":draft.get("status")}
+            result=send_draft(state["draft_id"],draft.get("approved_by") or "reconcile@n8n");state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st[date_key]=state;save_state(st);return result
     return router
