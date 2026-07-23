@@ -17,7 +17,11 @@ import hashlib
 import hmac
 import secrets
 import html
+import re
+import fcntl
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from email.mime.text import MIMEText
 from email import message_from_bytes
 from email.header import decode_header, make_header
@@ -43,6 +47,7 @@ UNSUBSCRIBE_BASE_URL = os.getenv("UNSUBSCRIBE_BASE_URL", "https://lhos-unsubscri
 AUTOMATION_TOKEN = os.getenv("LHOS_AUTOMATION_TOKEN", "")
 APPROVAL_SECRET = os.getenv("LHOS_APPROVAL_SECRET", "")
 TEST_RECIPIENT = "bobbyatf@gmail.com"
+ET = ZoneInfo("America/New_York")
 SUPPRESSION_LIST_URL = "https://raw.githubusercontent.com/VastlyResilient/lhos-unsubscribe-data/main/suppression_list.json"
 
 
@@ -58,7 +63,9 @@ def get_suppression_list() -> list:
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DRAFTS_FILE = DATA_DIR / "drafts.json"
+AUTOMATION_STATE_FILE = DATA_DIR / "automation_state.json"
 LOG_FILE = DATA_DIR / "send_log.json"
+APPROVAL_LOCK = DATA_DIR / "approval.lock"
 LEDGER_DIR = DATA_DIR / "send_ledgers"
 LEDGER_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -306,7 +313,9 @@ async def approval_page(draft_id: str, token: str = ""):
     test_mode = bool(draft.get("test_mode"))
     recipient_label = TEST_RECIPIENT if test_mode else "Active Beta Users (Google Contacts)"
     warning_text = f'TEST MODE: approval sends exactly one email to {TEST_RECIPIENT}.' if test_mode else 'Clicking "Approve & Send" will immediately send this email to ALL active beta users. This action cannot be undone.'
-    confirm_text = f'Approve this test and send exactly one email to {TEST_RECIPIENT}?' if test_mode else 'Are you sure? This will send the email to ALL active beta users immediately.'
+    confirm_text = f'Approve this test and send exactly one email to {TEST_RECIPIENT}?' if test_mode else 'Record approval for the validated email to send at 9:00 AM ET?'
+    approve_button_text = '✓ Approve & Send Test' if test_mode else '✓ Approve for 9:00 AM ET'
+    revision_recipients = TEST_RECIPIENT if test_mode else 'Kristina, Thomas, and Bobby'
     
     if draft["status"] == "sent":
         approver = draft.get("approved_by", "someone")
@@ -442,7 +451,7 @@ async def approval_page(draft_id: str, token: str = ""):
             alert('Subject and email content cannot be empty.');
             return;
           }}
-          if (!confirm('Submit this revised draft? It will be sent back to Kristina, Thomas, and Bobby for re-review.')) return;
+          if (!confirm('Submit this revised draft? It will be sent back to {revision_recipients} for re-review.')) return;
           var btn = event.target;
           btn.textContent = 'Submitting...';
           btn.style.opacity = '0.6';
@@ -470,7 +479,7 @@ async def approval_page(draft_id: str, token: str = ""):
         async function approveDraft(id) {{
           if (!confirm('{confirm_text}')) return;
           const btn = event.target;
-          btn.textContent = 'Sending...';
+          btn.textContent = 'Recording...';
           btn.style.opacity = '0.6';
           try {{
             const resp = await fetch('/api/lhos/approve/' + id + '?token={token}', {{
@@ -480,17 +489,18 @@ async def approval_page(draft_id: str, token: str = ""):
             }});
             const data = await resp.json();
             if (resp.ok) {{
-              var errNote = data.errors.length > 0 ? '<p style="color:#e74c3c;font-size:13px;margin-top:8px;">' + data.errors.length + ' error(s) occurred during sending.</p>' : '';
-              var skipNote = data.skipped_unsubscribed > 0 ? '<p style="color:#E6B35B;font-size:13px;margin-top:4px;">' + data.skipped_unsubscribed + ' recipient(s) skipped (unsubscribed).</p>' : '';
-              document.body.innerHTML = '<div style="font-family:Nunito,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f8f9fa;"><div style="text-align:center;padding:48px 40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(14,27,51,0.08);max-width:500px;width:90%;"><div style="font-size:48px;margin-bottom:8px;">✅</div><h1 style="color:{BRAND_NAVY};font-size:24px;margin:0 0 8px 0;">Email Sent Successfully!</h1><p style="color:#6b7c8d;font-size:15px;margin:8px 0;">The beta email has been sent to <strong style="color:{BRAND_NAVY};">' + data.recipient_count + '</strong> out of <strong style="color:{BRAND_NAVY};">' + data.total_recipients + '</strong> active beta testers.</p>' + skipNote + errNote + '<p style="color:#a0aec0;font-size:12px;margin-top:24px;">This confirmation was generated on ' + new Date().toLocaleString() + '</p><a href="/" style="display:inline-block;margin-top:20px;color:{BRAND_AQUA};text-decoration:none;font-size:14px;font-weight:600;">Return to Home</a></div></div>';
+              var isApproved = data.status === 'approved';
+              var heading = isApproved ? 'Approval Recorded' : 'Test Email Sent Successfully';
+              var detail = isApproved ? 'The validated beta email is scheduled for 9:00 AM Eastern. Any later revision cancels this approval and requires re-review.' : 'The isolated test email was delivered only to the authorized Bobby test inbox.';
+              document.body.innerHTML = '<div style="font-family:Nunito,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f8f9fa;"><div style="text-align:center;padding:48px 40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(14,27,51,0.08);max-width:500px;width:90%;"><div style="font-size:48px;margin-bottom:8px;">✅</div><h1 style="color:{BRAND_NAVY};font-size:24px;margin:0 0 8px 0;">' + heading + '</h1><p style="color:#6b7c8d;font-size:15px;margin:8px 0;">' + detail + '</p><p style="color:#a0aec0;font-size:12px;margin-top:24px;">Recorded on ' + new Date().toLocaleString() + '</p></div></div>';
             }} else {{
               alert('Error: ' + (data.detail || 'Unknown error'));
-              btn.textContent = '✓ Approve & Send';
+              btn.textContent = '{approve_button_text}';
               btn.style.opacity = '1';
             }}
           }} catch(e) {{
             alert('Error: ' + e.message);
-            btn.textContent = '✓ Approve & Send';
+            btn.textContent = '{approve_button_text}';
             btn.style.opacity = '1';
           }}
         }}
@@ -512,8 +522,10 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
         raise HTTPException(status_code=404, detail="Draft not found")
     
     old_draft = drafts[draft_id]
-    if old_draft["status"] in ("sent", "approved"):
-        raise HTTPException(status_code=400, detail="Cannot edit a draft that is already " + old_draft["status"])
+    if not old_draft.get("test_mode") and not (7 <= datetime.now(ET).hour < 9):
+        raise HTTPException(status_code=409, detail="Production revisions are accepted only from 7:00 to 9:00 AM Eastern")
+    if old_draft["status"] == "sent":
+        raise HTTPException(status_code=400, detail="Cannot edit a draft that is already sent")
     
     # HARD GUARD: Block edit if any draft for this date was already sent
     draft_date = old_draft.get("date", "")
@@ -550,6 +562,17 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
         "test_recipient": old_draft.get("test_recipient"),
     }
     save_drafts(drafts)
+    review_prefix = "[TEST REVIEW]" if old_draft.get("test_mode") else "[REVIEW]"
+    review_subject = f"{review_prefix} {edit.subject} (Revised via Editor)"
+    if AUTOMATION_STATE_FILE.exists() and not old_draft.get("test_mode"):
+        states = json.loads(AUTOMATION_STATE_FILE.read_text() or "{}")
+        for state_date, state in states.items():
+            if state.get("draft_id") == draft_id:
+                plain = re.sub(r"<[^>]+>", " ", edit.html_body)
+                plain = re.sub(r"\s+", " ", html.unescape(plain)).strip()
+                state.update({"stage":"review_sent","draft_id":new_draft_id,"review_subject":review_subject,"raw_content":plain,"approved_by":None,"approval_channel":None,"updated_at":datetime.now(timezone.utc).isoformat()})
+                states[state_date] = state
+        atomic_json_write(AUTOMATION_STATE_FILE, states)
     
     # Send the revised draft to approvers via Gmail
     try:
@@ -571,11 +594,10 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
 </body></html>"""
         
         approver_emails = old_draft.get("test_recipient") if old_draft.get("test_mode") else ",".join(APPROVERS)
-        review_prefix = "[TEST REVIEW]" if old_draft.get("test_mode") else "[REVIEW]"
         send_gmail(
             access_token,
             to=approver_emails,
-            subject=f"{review_prefix} {edit.subject} (Revised via Editor)",
+            subject=review_subject,
             html_body=approver_html,
             sender_email=SENDER_EMAIL,
             sender_name=SENDER_NAME,
@@ -586,6 +608,33 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
     
     return {"status": "revised", "old_draft_id": draft_id, "new_draft_id": new_draft_id, "approval_token": approval_token(new_draft_id)}
 
+
+@contextmanager
+def approval_lock():
+    APPROVAL_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(APPROVAL_LOCK, "a+") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try: yield
+        finally: fcntl.flock(fh, fcntl.LOCK_UN)
+
+def record_draft_approval(draft_id: str, approver: str):
+    """Record production approval for the 9 AM gate; isolated tests send immediately."""
+    with approval_lock():
+        drafts = load_drafts()
+        if draft_id not in drafts: raise HTTPException(status_code=404, detail="Draft not found")
+        draft = drafts[draft_id]
+        if draft.get("test_mode"):
+            return send_draft_safely(draft_id, approver)
+        if not (7 <= datetime.now(ET).hour < 9):
+            raise HTTPException(status_code=409, detail="Production approvals are accepted only from 7:00 to 9:00 AM Eastern")
+        if draft.get("status") == "sent":
+            return {"status":"sent","draft_id":draft_id,"recipient_count":draft.get("recipient_count",0)}
+        if draft.get("status") == "revised": raise HTTPException(status_code=409, detail="Draft was superseded")
+        if draft.get("status") not in ("pending_approval", "approved"):
+            raise HTTPException(status_code=409, detail=f"Draft cannot be approved from status {draft.get('status')}")
+        draft.update({"status":"approved","approved_by":approver,"approved_at":datetime.now(timezone.utc).isoformat(),"scheduled_for":"09:00 America/New_York"})
+        save_drafts(drafts)
+        return {"status":"approved","draft_id":draft_id,"approved_by":approver,"scheduled_for":"09:00 America/New_York","recipient_count":0}
 
 def send_draft_safely(draft_id: str, approver: str):
     drafts = load_drafts()
@@ -628,7 +677,7 @@ async def approve_and_send(draft_id: str, request: Request, token: str = ""):
     if not (AUTOMATION_TOKEN and hmac.compare_digest(request.headers.get("x-lhos-automation-token", ""), AUTOMATION_TOKEN)):
         verify_approval(draft_id, token)
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
-    return send_draft_safely(draft_id, body.get("approver", "unknown"))
+    return record_draft_approval(draft_id, body.get("approver", "unknown"))
 
 class TestReviewCreate(BaseModel):
     subject: str
@@ -671,6 +720,7 @@ app.include_router(configure_router(
     load_drafts=load_drafts,
     save_drafts=save_drafts,
     send_draft=send_draft_safely,
+    approve_draft=record_draft_approval,
     approvers=APPROVERS,
     public_url=PUBLIC_URL,
     sender_email=SENDER_EMAIL,

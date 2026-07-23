@@ -2,6 +2,7 @@ import os,tempfile,unittest,importlib
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from fastapi import HTTPException
+from datetime import datetime as RealDateTime
 class SecurityTests(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory();os.environ['DATA_DIR']=self.t.name;os.environ['LHOS_AUTOMATION_TOKEN']='auto';os.environ['LHOS_APPROVAL_SECRET']='approve-secret'
@@ -27,4 +28,22 @@ class SecurityTests(unittest.TestCase):
   with patch.object(self.main,'get_google_access_token',return_value='tok'),patch.object(self.main,'gmail_exact_sent',return_value=False),patch.object(self.main,'send_gmail',side_effect=lambda token,to,subject,body,*a,**k:(calls.append(to) or {'id':'m'})),patch.object(self.main,'get_contact_group_id',side_effect=AssertionError('production contacts accessed')):
    result=self.main.send_draft_safely(d['draft_id'],'test-approver')
   self.assertEqual(result['status'],'sent');self.assertEqual(calls,['bobbyatf@gmail.com'])
+ def test_production_approval_records_without_sending(self):
+  d=self.main.create_draft_record('s','RECIPIENT_NAME_PLACEHOLDER UNSUB_URL_PLACEHOLDER','content','July 23, 2026')
+  module=self.main
+  class AtEight(RealDateTime):
+   @classmethod
+   def now(cls,tz=None):
+    x=RealDateTime(2026,7,23,8,0,tzinfo=module.ET);return x.astimezone(tz) if tz else x
+  with patch.object(module,'datetime',AtEight),patch.object(module,'send_gmail',side_effect=AssertionError('send called')):
+   out=module.record_draft_approval(d['draft_id'],'Kristina via email')
+  self.assertEqual(out['status'],'approved');self.assertEqual(module.load_drafts()[d['draft_id']]['status'],'approved')
+ def test_production_approval_rejected_after_deadline(self):
+  d=self.main.create_draft_record('s','RECIPIENT_NAME_PLACEHOLDER UNSUB_URL_PLACEHOLDER','content','July 23, 2026');module=self.main
+  class AtNine(RealDateTime):
+   @classmethod
+   def now(cls,tz=None):
+    x=RealDateTime(2026,7,23,9,1,tzinfo=module.ET);return x.astimezone(tz) if tz else x
+  with patch.object(module,'datetime',AtNine):
+   with self.assertRaises(HTTPException):module.record_draft_approval(d['draft_id'],'late')
 if __name__=='__main__':unittest.main()
