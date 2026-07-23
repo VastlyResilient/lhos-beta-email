@@ -8,7 +8,7 @@ class CloudTests(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
  def tearDown(self):self.t.cleanup()
- def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a:{'status':'approved'},initial_drafts=None):
+ def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None):
   app=FastAPI(); drafts=dict(initial_drafts or {}); self._drafts=drafts
   def create(s,h,t,d):drafts['id']={'id':'id','subject':s,'html_body':h,'text_body':t,'date':d,'status':'pending_approval'};return {'draft_id':'id'}
   app.include_router(ca.configure_router(get_token=lambda:'tok',send_email=send_email,create_draft=create,load_drafts=lambda:drafts,save_drafts=lambda d:None,send_draft=send_draft,approve_draft=approve_draft,approvers=['a@example.com'],public_url='https://x',sender_email='iris@example.com',sender_name='Iris'));return TestClient(app)
@@ -48,4 +48,20 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'revise_with_glm',return_value=raw.replace('clearer labels','clearer labels and revised colors')):
    r=app.post('/api/lhos/automation/decision',headers={'x-lhos-automation-token':'secret'},json={'actor':'Kristina','text':'change the labels','message_id':'m-revise','channel':'imessage'})
   self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'revised_review_sent');newid=r.json()['draft_id'];self.assertIn(newid,self._drafts);self.assertEqual(self._drafts['old']['status'],'revised');self.assertEqual(len(sent),1)
+ def test_manual_late_send_requires_exact_confirmation(self):
+  at16=ca.now_et().replace(hour=16,minute=0,second=0,microsecond=0)
+  with patch.object(ca,'now_et',return_value=at16):
+   r=self.app().post('/api/lhos/automation/manual-send',headers={'x-lhos-automation-token':'secret'},json={'date':at16.strftime('%Y-%m-%d'),'confirm':'send it'})
+  self.assertEqual(r.status_code,400)
+ def test_manual_late_send_dry_run_is_non_sending(self):
+  at16=ca.now_et().replace(hour=16,minute=0,second=0,microsecond=0);date=at16.strftime('%Y-%m-%d');raw='Daily Beta Notes\nA concrete beta update describes testing and feedback from users.\nWhat Changed\nThe dashboard has a revised navigation flow with clearer labels.\nHelpful Reminder\nPlease continue testing and report any specific issue.\nThank You\nThank you for the detailed feedback and continued beta participation.'
+  with patch.object(ca,'now_et',return_value=at16),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'x.docx'})):
+   r=self.app().post('/api/lhos/automation/manual-send?dry_run=true',headers={'x-lhos-automation-token':'secret'},json={'date':date,'confirm':f'SEND {date} LATE TO ACTIVE BETA TESTERS'})
+  self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'would_manual_send')
+ def test_manual_late_send_happy_path_calls_delivery_once(self):
+  at16=ca.now_et().replace(hour=16,minute=0,second=0,microsecond=0);date=at16.strftime('%Y-%m-%d');raw='Daily Beta Notes\nA concrete beta update describes testing and feedback from users.\nWhat Changed\nThe dashboard has a revised navigation flow with clearer labels.\nHelpful Reminder\nPlease continue testing and report any specific issue.\nThank You\nThank you for the detailed feedback and continued beta participation.';calls=[];approvals=[]
+  app=self.app(send_draft=lambda *a:(calls.append(a) or {'status':'sent','recipient_count':2,'newly_sent_count':2,'errors':[]}),approve_draft=lambda *a,**k:(approvals.append((a,k)) or {'status':'approved'}))
+  with patch.object(ca,'now_et',return_value=at16),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'x.docx'})):
+   r=app.post('/api/lhos/automation/manual-send',headers={'x-lhos-automation-token':'secret'},json={'date':date,'confirm':f'SEND {date} LATE TO ACTIVE BETA TESTERS'})
+  self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'manual_send_executed');self.assertEqual(len(calls),1);self.assertTrue(approvals[0][1]['manual_override'])
 if __name__=='__main__':unittest.main()

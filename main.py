@@ -705,7 +705,7 @@ def approval_lock():
         try: yield
         finally: fcntl.flock(fh, fcntl.LOCK_UN)
 
-def record_draft_approval(draft_id: str, approver: str):
+def record_draft_approval(draft_id: str, approver: str, manual_override: bool = False):
     """Record production approval for the 3 PM gate; isolated tests send immediately."""
     with approval_lock():
         drafts = load_drafts()
@@ -713,16 +713,16 @@ def record_draft_approval(draft_id: str, approver: str):
         draft = drafts[draft_id]
         if draft.get("test_mode"):
             return send_draft_safely(draft_id, approver)
-        if not (7 <= datetime.now(ET).hour < 15):
+        if not manual_override and not (7 <= datetime.now(ET).hour < 15):
             raise HTTPException(status_code=409, detail="Production approvals are accepted only from 7:00 AM to 3:00 PM Eastern")
         if draft.get("status") == "sent":
             return {"status":"sent","draft_id":draft_id,"recipient_count":draft.get("recipient_count",0)}
         if draft.get("status") == "revised": raise HTTPException(status_code=409, detail="Draft was superseded")
         if draft.get("status") not in ("pending_approval", "approved"):
             raise HTTPException(status_code=409, detail=f"Draft cannot be approved from status {draft.get('status')}")
-        draft.update({"status":"approved","approved_by":approver,"approved_at":datetime.now(timezone.utc).isoformat(),"scheduled_for":"15:00 America/New_York"})
+        draft.update({"status":"approved","approved_by":approver,"approved_at":datetime.now(timezone.utc).isoformat(),"scheduled_for":"manual late authorization" if manual_override else "15:00 America/New_York","manual_override":bool(manual_override)})
         save_drafts(drafts)
-        return {"status":"approved","draft_id":draft_id,"approved_by":approver,"scheduled_for":"15:00 America/New_York","recipient_count":0}
+        return {"status":"approved","draft_id":draft_id,"approved_by":approver,"scheduled_for":"manual late authorization" if manual_override else "15:00 America/New_York","recipient_count":0}
 
 def send_draft_safely(draft_id: str, approver: str):
     drafts = load_drafts()

@@ -280,6 +280,23 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             if not dry_run:
                 processed.add(key);atomic_json_write(PROCESSED_FILE,sorted(processed))
             return result
+    @router.post("/manual-send")
+    async def manual_send(req:Request,dry_run:bool=False):
+        auth(req)
+        with automation_lock():
+            payload=await req.json();date_key,date_display=current();expected=f"SEND {date_key} LATE TO ACTIVE BETA TESTERS"
+            if payload.get("date")!=date_key or payload.get("confirm")!=expected:
+                raise HTTPException(status_code=400,detail="Exact current-date late-send confirmation is required")
+            if now_et().hour < 15:raise HTTPException(status_code=409,detail="Manual late-send override is available only after the 3 PM deadline")
+            token=get_token();subject=f"LifeHouse OS Beta Update - {date_display}"
+            if gmail_subject_sent_any(token,subject,date_key):return {"action":"already_sent","subject":subject}
+            f,raw,meta=drive_source(token,date_key);ok,reasons=validate_daily_content(raw)
+            if not ok:raise HTTPException(status_code=409,detail={"message":"Current Drive content is invalid","reasons":reasons,"source":meta})
+            sections=deterministic_sections(raw);email_html=build_beta_email(sections,date_display)
+            if dry_run:return {"action":"would_manual_send","subject":subject,"source":meta,"content_chars":len(raw),"confirm":expected}
+            created=create_draft(subject,email_html,raw,date_display);did=created["draft_id"];approval=approve_draft(did,"Bobby explicit late-send authorization",manual_override=True)
+            st=state_all();state={"date":date_key,"date_display":date_display,"stage":"approved","content_valid":True,"draft_id":did,"subject":subject,"source":meta,"raw_content":raw,"approved_by":"Bobby","approval_channel":"explicit chat authorization","approved_at":now_et().isoformat(),"manual_override":True,"updated_at":now_et().isoformat()};st[date_key]=state;save_state(st)
+            result=send_draft(did,"Bobby explicit late-send authorization");state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st=state_all();st[date_key]=state;save_state(st);return {"action":"manual_send_executed","draft_id":did,"approval":approval,**result}
     def notify_not_sent(date_key,date_display,state,reason,token,dry_run):
         subject=f"[NOT SENT] LifeHouse OS beta update - {date_display}"
         if dry_run:return {"action":"would_notify_not_sent","reason":reason,"stage":state.get("stage") if state else None}
