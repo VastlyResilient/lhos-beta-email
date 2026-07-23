@@ -20,7 +20,7 @@ AUTOMATION_TOKEN=os.getenv("LHOS_AUTOMATION_TOKEN","")
 END_DATE=os.getenv("LHOS_END_DATE","").strip()
 GLM_API_KEY=os.getenv("GLM_API_KEY","")
 GLM_BASE_URL=os.getenv("GLM_BASE_URL","https://api.z.ai/api/paas/v4")
-DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
+DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
 KRISTINA="kristina@freedomforgeai.com"
 APPROVAL_WORDS=("approved","approve","looks good","send it","go ahead","lgtm","ship it")
 
@@ -163,7 +163,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         if dry_run:return {"action":"would_send_review","valid":True,"sections":list(sections),"subject":subject,"source":source}
         result=create_draft(subject,email_html,raw,date_display);did=result['draft_id'];review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display}"
         if not gmail_subject_sent_any(token,review_subject,date_key):send_email(token,','.join(approvers),review_subject,make_review(date_display,result.get("approval_url", f"/lhos/approve/{did}"),email_html,subtitle),sender_email,sender_name)
-        st=state_all();st[date_key]={"date":date_key,"date_display":date_display,"stage":"review_sent","content_valid":True,"draft_id":did,"subject":subject,"review_subject":review_subject,"source":source,"raw_content":raw,"updated_at":now_et().isoformat()};save_state(st)
+        st=state_all();_created=now_et();_eligible=(_created.hour<8 or (_created.hour==8 and _created.minute==0));st[date_key]={"date":date_key,"date_display":date_display,"stage":"review_sent","content_valid":True,"draft_id":did,"subject":subject,"review_subject":review_subject,"source":source,"raw_content":raw,"review_sent_at":_created.isoformat(),"auto_send_eligible":_eligible,"updated_at":_created.isoformat()};save_state(st)
         return {"action":"review_sent","draft_id":did,"subject":subject}
     def prepare_impl(dry_run=False,force=False):
         date_key,date_display=current()
@@ -258,4 +258,21 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             if not authorized:return {"action":"no_op","stage":state.get("stage"),"draft_status":draft.get("status")}
             if dry_run:return {"action":"would_reconcile","draft_id":state.get("draft_id"),"draft_status":draft.get("status")}
             result=send_draft(state["draft_id"],draft.get("approved_by") or "reconcile@n8n");state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st[date_key]=state;save_state(st);return result
+    @router.post("/watchdog")
+    async def watchdog(req:Request,dry_run:bool=False):
+        auth(req)
+        with automation_lock():
+            date_key,date_display=current();now=now_et();state=state_all().get(date_key);reason=None
+            if now.hour < 9:return {"action":"too_early","time":now.isoformat()}
+            if not state:reason="No cloud automation state exists after 9:00 AM ET; the preparation schedule may have been missed."
+            elif state.get("stage") in ("sending","partial","approved"):
+                reason=f"Authorized batch is stuck in {state.get('stage')} and requires reconciliation."
+            elif state.get("stage")=="review_sent" and state.get("auto_send_eligible"):
+                reason="A pre-8 AM validated review draft remains unsent after the auto-send window."
+            if not reason:return {"action":"healthy_or_expected_hold","stage":state.get("stage") if state else None}
+            key=hashlib.sha256((date_key+reason).encode()).hexdigest();alerts=load(ALERTS_FILE,{})
+            if alerts.get(key):return {"action":"alert_already_sent","reason":reason}
+            if dry_run:return {"action":"would_alert_bobby","reason":reason}
+            token=get_token();subject=f"[LHOS AUTOMATION ALERT] {date_display}";body=f"<p><strong>LifeHouse OS cloud automation needs attention.</strong></p><p>{html.escape(reason)}</p><p>Date: {date_display}<br>Stage: {html.escape(str(state.get('stage') if state else 'no_state'))}</p><p>No beta email was sent by this watchdog.</p>"
+            send_email(token,"bobbyatf@gmail.com",subject,body,sender_email,sender_name);alerts[key]={"sent_at":now.isoformat(),"reason":reason};atomic_json_write(ALERTS_FILE,alerts);return {"action":"alert_sent_to_bobby","reason":reason}
     return router

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import cloud_automation as ca
 class CloudTests(unittest.TestCase):
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
+  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
  def tearDown(self):self.t.cleanup()
  def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called'))):
   app=FastAPI(); drafts={}
@@ -24,4 +24,8 @@ class CloudTests(unittest.TestCase):
   r=self.app().post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'});self.assertEqual(r.json()['action'],'blocked')
  def test_unauthorized(self):
   self.assertEqual(self.app().get('/api/lhos/automation/status').status_code,401)
+ def test_watchdog_dry_run_never_sends(self):
+  with patch.object(ca,'now_et',return_value=ca.datetime(2030,1,1,10,0,tzinfo=ca.ET)):
+   r=self.app().post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
+   self.assertEqual(r.json()['action'],'would_alert_bobby')
 if __name__=='__main__':unittest.main()

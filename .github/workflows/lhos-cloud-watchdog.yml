@@ -1,0 +1,29 @@
+name: LHOS Cloud Automation Watchdog
+
+on:
+  schedule:
+    # Hourly across the US Eastern morning; backend applies America/New_York gates.
+    - cron: '17 13-18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: lhos-cloud-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check n8n/Railway automation state
+        env:
+          LHOS_AUTOMATION_TOKEN: ${{ secrets.LHOS_AUTOMATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 3 --retry-all-errors --retry-delay 10 \
+            --max-time 120 -X POST \
+            -H "X-LHOS-Automation-Token: ${LHOS_AUTOMATION_TOKEN}" \
+            "https://lhos-beta-email-production.up.railway.app/api/lhos/automation/watchdog"
