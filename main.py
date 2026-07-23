@@ -39,6 +39,7 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 
 APPROVERS = json.loads(os.getenv("LHOS_APPROVERS", '["kristina@lifehouseos.app","thomas@lifehouseos.app","bobby@lifehouseos.app"]'))
+APPROVAL_SENDERS = json.loads(os.getenv("LHOS_APPROVAL_SENDERS", json.dumps(APPROVERS)))
 CONTACT_GROUP_NAME = os.getenv("LHOS_CONTACT_GROUP", "LifeHouse OS Beta - Active")
 SENDER_EMAIL = os.getenv("LHOS_SENDER_EMAIL", "iris@lifehouseos.com")
 SENDER_NAME = os.getenv("LHOS_SENDER_NAME", "LifeHouse OS")
@@ -814,6 +815,7 @@ app.include_router(configure_router(
     send_draft=send_draft_safely,
     approve_draft=record_draft_approval,
     approvers=APPROVERS,
+    approval_senders=APPROVAL_SENDERS,
     public_url=PUBLIC_URL,
     sender_email=SENDER_EMAIL,
     sender_name=SENDER_NAME,

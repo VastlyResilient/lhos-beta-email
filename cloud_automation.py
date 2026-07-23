@@ -170,7 +170,7 @@ def revise_with_glm(raw,feedback):
         else:last=f"{r.status_code} {r.text[:300]}"
     raise RuntimeError("Revision failed: "+last)
 
-def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts,send_draft,approve_draft,approvers,public_url,sender_email,sender_name):
+def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts,send_draft,approve_draft,approvers,approval_senders,public_url,sender_email,sender_name):
     router=APIRouter(prefix="/api/lhos/automation")
     def state_all():return load(STATE_FILE,{})
     def save_state(d):atomic_json_write(STATE_FILE,d)
@@ -251,7 +251,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             date_key,date_display=current();st=state_all();state=st.get(date_key)
             if not state:return {"action":"no_state"}
             if state.get("stage") in ("sent","sent_external"):return {"action":"daily_complete","stage":state.get("stage"),"draft_id":state.get("draft_id")}
-            token=get_token();processed=set(load(PROCESSED_FILE,[]));allowed={a.strip().lower() for a in approvers}
+            token=get_token();processed=set(load(PROCESSED_FILE,[]));allowed={a.strip().lower() for a in approval_senders}
             auth_query=' '.join('from:'+a for a in sorted(allowed));queries=[f'in:inbox after:{date_key.replace("-","/")} {{{auth_query}}}',f'in:inbox after:{date_key.replace("-","/")} {{subject:"LifeHouse OS" subject:"beta email" subject:LHOS}}']
             ids={}
             for q in queries:
