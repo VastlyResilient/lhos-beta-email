@@ -9,9 +9,10 @@ class BridgeTests(unittest.TestCase):
   self.assertEqual(b.signed("hello").count(b.SIGN),1);self.assertEqual(b.signed("hello\n\n"+b.SIGN).count(b.SIGN),1)
  def test_only_direct_workflow_language_routes(self):
   s={"outbound_guids":["z1"]}
-  self.assertTrue(b.direct({"text":"Iris, change the email headline"},s))
-  self.assertTrue(b.direct({"text":"good send it"},s))
-  self.assertTrue(b.direct({"text":"yes","reply_to_guid":"z1"},s))
+  self.assertTrue(b.direct({"text":"Iris: change the email headline"},s))
+  self.assertFalse(b.direct({"text":"good send it"},s))
+  self.assertFalse(b.direct({"text":"yes","reply_to_guid":"z1"},s))
+  self.assertFalse(b.direct({"text":"Zilla, approve this"},s))
   self.assertFalse(b.direct({"text":"meeting Frank at three"},s))
   self.assertFalse(b.direct({"text":"confirmed"},s))
  def test_actor_allowlist_and_own_signature(self):
@@ -20,10 +21,10 @@ class BridgeTests(unittest.TestCase):
   self.assertEqual(b.actor({"is_from_me":True,"text":"approve"}),"Bobby")
   self.assertEqual(b.actor({"is_from_me":True,"text":"ok\n"+b.SIGN}),None)
  def test_dry_run_send_is_ffai_signed_and_deduped(self):
-  s={"sent_hashes":[],"outbound_guids":[]}
+  s={"sent_hashes":[],"outbound_guids":[],"send_attempts":{}}
   with patch.object(b,'verify',return_value=True):
    r=b.send_group('notice',s,True)
   self.assertEqual(r['action'],'would_send');self.assertTrue(r['text'].endswith(b.SIGN))
-  key=hashlib.sha256(r['text'].encode()).hexdigest();s['sent_hashes']=[key]
+  day=b.dt.datetime.now(b.ET).strftime('%Y-%m-%d');key=hashlib.sha256((day+b.CHAT_GUID+r['text']).encode()).hexdigest();s['sent_hashes']=[key]
   with patch.object(b,'verify',return_value=True):self.assertEqual(b.send_group('notice',s,True)['action'],'duplicate_suppressed')
 if __name__=='__main__':unittest.main()

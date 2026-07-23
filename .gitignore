@@ -8,3 +8,4 @@ __pycache__/
 .automation_token
 n8n-lhos-production-workflow.json
 .approval_secret
+n8n-lhos-7-9-production.json

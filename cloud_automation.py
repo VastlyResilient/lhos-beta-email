@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from email import message_from_bytes
 from email.header import decode_header, make_header
+from email.utils import parseaddr
 from email.mime.text import MIMEText
 from io import BytesIO
 from pathlib import Path
@@ -203,7 +204,9 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             draft.update({"status":"pending_approval","approved_by":None,"approved_at":None});save_drafts(drafts);state.update({"stage":"review_sent","approved_by":None,"approval_channel":None,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"send_held","draft_id":state["draft_id"],"actor":actor}
         if kind=="ambiguous":return {"action":"clarification_needed","draft_id":state["draft_id"],"actor":actor}
         revised=revise_with_glm(state.get("raw_content",draft.get("text_body","")),text);sections=deterministic_sections(revised);email_html=build_beta_email(sections,date_display);subject=state["subject"];new=create_draft(subject,email_html,revised,date_display)
-        draft["status"]="revised";draft["revised_at"]=now_et().isoformat();save_drafts(drafts)
+        drafts=load_drafts();old_draft=drafts.get(state["draft_id"])
+        if not old_draft:raise RuntimeError("Original draft disappeared during revision")
+        old_draft["status"]="revised";old_draft["revised_at"]=now_et().isoformat();save_drafts(drafts)
         did=new["draft_id"];count=int(state.get("revision_count",0))+1;review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Revision {count})";send_email(token,','.join(approvers),review_subject,make_review(date_display,new.get("approval_url",f"/lhos/approve/{did}"),email_html,f"Revision {count} applied from {actor}"),sender_email,sender_name)
         state.update({"stage":"review_sent","draft_id":did,"review_subject":review_subject,"raw_content":revised,"revision_count":count,"approved_by":None,"approval_channel":None,"last_revision_by":actor,"last_revision_channel":channel,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"revised_review_sent","draft_id":did,"revision_count":count,"actor":actor}
     @router.get("/status")
@@ -243,8 +246,8 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 msgs=gmail_search(token,f'subject:"{state.get("review_subject")}" after:{date_key.replace("-","/")}',50)
                 for item in msgs:
                     if item['id'] in processed:continue
-                    msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=h.get('from','').lower()
-                    if not any(a.lower() in frm for a in approvers):continue
+                    msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=parseaddr(h.get('from',''))[1].strip().lower()
+                    if frm not in {a.strip().lower() for a in approvers}:continue
                     body=clean_reply(extract_gmail_body(msg.get('payload',{})));kind=classify_instruction(body)
                     if dry_run:return {"action":f"would_{kind}","message_id":item['id']}
                     result=apply_instruction(date_key,date_display,state,frm,body,token,"email")

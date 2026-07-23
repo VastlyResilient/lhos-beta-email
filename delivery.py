@@ -1,5 +1,5 @@
 """Recipient-level idempotent delivery with atomic persistent ledger."""
-import fcntl, json, os, tempfile
+import fcntl, json, os, tempfile, hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,17 +14,24 @@ def atomic_json_write(path: Path, data):
         if os.path.exists(tmp): os.unlink(tmp)
 
 def load_json(path: Path, default):
-    try: return json.loads(path.read_text())
-    except Exception: return default
+    if not path.exists(): return default
+    try:
+        data=json.loads(path.read_text())
+    except Exception as exc:
+        raise RuntimeError(f"ledger is unreadable; refusing delivery: {exc}")
+    if not isinstance(data,dict) or not isinstance(data.get("recipients"),dict):
+        raise RuntimeError("ledger schema is invalid; refusing delivery")
+    return data
 
 def deliver_once(*, date_key, subject, html_body, contacts, suppressed, ledger_file, already_sent, send_one, unsubscribe_base):
     """Deliver at most once per address. Safe to call repeatedly after partial failure."""
     ledger_file=Path(ledger_file); lock_file=ledger_file.with_suffix('.lock'); lock_file.parent.mkdir(parents=True,exist_ok=True)
     with open(lock_file,'w') as lf:
         fcntl.flock(lf,fcntl.LOCK_EX)
-        ledger=load_json(ledger_file, {'date':date_key,'subject':subject,'recipients':{}})
-        if ledger.get('date')!=date_key or ledger.get('subject')!=subject:
-            raise RuntimeError('ledger identity mismatch')
+        content_hash=hashlib.sha256(html_body.encode()).hexdigest()
+        ledger=load_json(ledger_file, {'date':date_key,'subject':subject,'content_hash':content_hash,'recipients':{}})
+        if ledger.get('date')!=date_key or ledger.get('subject')!=subject or ledger.get('content_hash')!=content_hash:
+            raise RuntimeError('ledger identity/content mismatch')
         dedup={}
         for c in contacts:
             addr=(c.get('email') or '').strip().lower()
@@ -37,6 +44,15 @@ def deliver_once(*, date_key, subject, html_body, contacts, suppressed, ledger_f
                 entry.update({'status':'suppressed','updated_at':datetime.now(timezone.utc).isoformat()}); skipped.append(addr); atomic_json_write(ledger_file,ledger); continue
             if entry.get('status') in ('sent','existing'):
                 existing.append(addr); continue
+            if entry.get('status') in ('uncertain','reserved'):
+                try: found=already_sent(addr,subject)
+                except Exception as exc:
+                    errors.append({'email':addr,'error':'uncertain delivery; reconciliation precheck failed: '+str(exc)});continue
+                if found:
+                    entry.update({'status':'existing','updated_at':datetime.now(timezone.utc).isoformat()});existing.append(addr);atomic_json_write(ledger_file,ledger)
+                else:
+                    errors.append({'email':addr,'error':'delivery remains uncertain; automatic resend blocked'})
+                continue
             try:
                 found=already_sent(addr,subject)
             except Exception as exc:
@@ -46,6 +62,7 @@ def deliver_once(*, date_key, subject, html_body, contacts, suppressed, ledger_f
             personalized=html_body.replace('RECIPIENT_NAME_PLACEHOLDER',f'Hello {name}!').replace('UNSUB_URL_PLACEHOLDER',f'{unsubscribe_base}/?email={addr}')
             if 'RECIPIENT_NAME_PLACEHOLDER' in personalized or 'UNSUB_URL_PLACEHOLDER' in personalized:
                 entry.update({'status':'error','error':'personalization failed'});errors.append({'email':addr,'error':'personalization failed'});atomic_json_write(ledger_file,ledger);continue
+            entry.update({'status':'reserved','attempted_at':datetime.now(timezone.utc).isoformat()});atomic_json_write(ledger_file,ledger)
             try:
                 result=send_one(addr,subject,personalized)
                 entry.update({'status':'sent','message_id':(result or {}).get('id'),'sent_at':datetime.now(timezone.utc).isoformat()});newly_sent.append(addr)
@@ -56,7 +73,7 @@ def deliver_once(*, date_key, subject, html_body, contacts, suppressed, ledger_f
                 if confirmed:
                     entry.update({'status':'existing','updated_at':datetime.now(timezone.utc).isoformat()});existing.append(addr)
                 else:
-                    entry.update({'status':'error','error':str(exc),'updated_at':datetime.now(timezone.utc).isoformat()});errors.append({'email':addr,'error':str(exc)})
+                    entry.update({'status':'uncertain','error':str(exc),'updated_at':datetime.now(timezone.utc).isoformat()});errors.append({'email':addr,'error':'ambiguous delivery; automatic resend blocked: '+str(exc)})
             atomic_json_write(ledger_file,ledger)
         delivered=[a for a,e in ledger['recipients'].items() if e.get('status') in ('sent','existing')]
         pending=[a for a,e in ledger['recipients'].items() if e.get('status') not in ('sent','existing','suppressed')]

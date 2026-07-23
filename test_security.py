@@ -46,4 +46,9 @@ class SecurityTests(unittest.TestCase):
     x=RealDateTime(2026,7,23,9,1,tzinfo=module.ET);return x.astimezone(tz) if tz else x
   with patch.object(module,'datetime',AtNine):
    with self.assertRaises(HTTPException):module.record_draft_approval(d['draft_id'],'late')
+ def test_production_signed_link_is_preview_only(self):
+  d=self.main.create_draft_record('s','RECIPIENT_NAME_PLACEHOLDER UNSUB_URL_PLACEHOLDER','content','July 23, 2026');tok=self.main.approval_token(d['draft_id'])
+  page=self.c.get(f"/lhos/approve/{d['draft_id']}?token={tok}");self.assertEqual(page.status_code,200);self.assertIn('reply directly to the review email',page.text)
+  approve=self.c.post(f"/api/lhos/approve/{d['draft_id']}?token={tok}",json={});self.assertEqual(approve.status_code,403)
+  edit=self.c.post(f"/api/lhos/drafts/{d['draft_id']}/edit?token={tok}",json={'subject':'x','html_body':'y'});self.assertEqual(edit.status_code,403)
 if __name__=='__main__':unittest.main()
