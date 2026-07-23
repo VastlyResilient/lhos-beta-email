@@ -42,6 +42,7 @@ FEEDBACK_LINK = os.getenv("LHOS_FEEDBACK_LINK", "https://lifehouseos.app/feedbac
 UNSUBSCRIBE_BASE_URL = os.getenv("UNSUBSCRIBE_BASE_URL", "https://lhos-unsubscribe-production.up.railway.app")
 AUTOMATION_TOKEN = os.getenv("LHOS_AUTOMATION_TOKEN", "")
 APPROVAL_SECRET = os.getenv("LHOS_APPROVAL_SECRET", "")
+TEST_RECIPIENT = "bobbyatf@gmail.com"
 SUPPRESSION_LIST_URL = "https://raw.githubusercontent.com/VastlyResilient/lhos-unsubscribe-data/main/suppression_list.json"
 
 
@@ -226,6 +227,8 @@ class DraftCreate(BaseModel):
     html_body: str
     text_body: str = ""
     date: str = ""
+    test_mode: bool = False
+    test_recipient: str | None = None
 
 def require_automation(request: Request):
     supplied = request.headers.get("x-lhos-automation-token", "")
@@ -244,10 +247,17 @@ def verify_approval(draft_id: str, token: str):
 async def root():
     return {"service": "LifeHouse OS Beta Email", "status": "running"}
 
-def create_draft_record(subject: str, html_body: str, text_body: str, date_value: str):
+def create_draft_record(subject: str, html_body: str, text_body: str, date_value: str, test_mode: bool = False, test_recipient: str | None = None):
     draft_id = uuid.uuid4().hex
+    if test_mode:
+        normalized = (test_recipient or TEST_RECIPIENT).strip().lower()
+        if normalized != TEST_RECIPIENT:
+            raise HTTPException(status_code=400, detail="Test drafts may only target the authorized Bobby test inbox")
+        test_recipient = TEST_RECIPIENT
+    else:
+        test_recipient = None
     drafts = load_drafts()
-    drafts[draft_id] = {"id":draft_id,"subject":subject,"html_body":html_body,"text_body":text_body,"date":date_value or datetime.now(timezone.utc).strftime("%Y-%m-%d"),"status":"pending_approval","created_at":datetime.now(timezone.utc).isoformat(),"approved_by":None,"approved_at":None,"sent_at":None,"recipient_count":0,"send_errors":[]}
+    drafts[draft_id] = {"id":draft_id,"subject":subject,"html_body":html_body,"text_body":text_body,"date":date_value or datetime.now(timezone.utc).strftime("%Y-%m-%d"),"status":"pending_approval","created_at":datetime.now(timezone.utc).isoformat(),"approved_by":None,"approved_at":None,"sent_at":None,"recipient_count":0,"send_errors":[],"test_mode":bool(test_mode),"test_recipient":test_recipient}
     save_drafts(drafts)
     return {"draft_id":draft_id,"approval_url":f"/lhos/approve/{draft_id}?token={approval_token(draft_id)}","status":"pending_approval"}
 
@@ -255,7 +265,7 @@ def create_draft_record(subject: str, html_body: str, text_body: str, date_value
 async def create_draft(draft: DraftCreate, request: Request):
     """Register a new draft for approval."""
     require_automation(request)
-    return create_draft_record(draft.subject,draft.html_body,draft.text_body,draft.date)
+    return create_draft_record(draft.subject,draft.html_body,draft.text_body,draft.date,draft.test_mode,draft.test_recipient)
 
 @app.get("/api/lhos/drafts")
 async def list_drafts(request: Request):
@@ -293,6 +303,10 @@ async def approval_page(draft_id: str, token: str = ""):
         return HTMLResponse(content="<h1>Draft not found</h1>", status_code=404)
     
     draft = drafts[draft_id]
+    test_mode = bool(draft.get("test_mode"))
+    recipient_label = TEST_RECIPIENT if test_mode else "Active Beta Users (Google Contacts)"
+    warning_text = f'TEST MODE: approval sends exactly one email to {TEST_RECIPIENT}.' if test_mode else 'Clicking "Approve & Send" will immediately send this email to ALL active beta users. This action cannot be undone.'
+    confirm_text = f'Approve this test and send exactly one email to {TEST_RECIPIENT}?' if test_mode else 'Are you sure? This will send the email to ALL active beta users immediately.'
     
     if draft["status"] == "sent":
         approver = draft.get("approved_by", "someone")
@@ -372,12 +386,11 @@ async def approval_page(draft_id: str, token: str = ""):
           <div class="info-row"><span class="info-label">Date</span><span class="info-value">{draft["date"]}</span></div>
           <div class="info-row"><span class="info-label">Subject</span><span class="info-value">{draft["subject"]}</span></div>
           <div class="info-row"><span class="info-label">Status</span><span class="info-value">Pending Approval</span></div>
-          <div class="info-row"><span class="info-label">Recipients</span><span class="info-value">Active Beta Users (Google Contacts)</span></div>
+          <div class="info-row"><span class="info-label">Recipients</span><span class="info-value">{recipient_label}</span></div>
         </div>
         
         <div class="warning">
-          ⚠️ Clicking "Approve & Send" will immediately send this email to ALL active beta users.
-          This action cannot be undone.
+          ⚠️ {warning_text}
         </div>
         
         <div class="preview">
@@ -455,7 +468,7 @@ async def approval_page(draft_id: str, token: str = ""):
         }}
         
         async function approveDraft(id) {{
-          if (!confirm('Are you sure? This will send the email to ALL active beta users immediately.')) return;
+          if (!confirm('{confirm_text}')) return;
           const btn = event.target;
           btn.textContent = 'Sending...';
           btn.style.opacity = '0.6';
@@ -505,7 +518,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
     # HARD GUARD: Block edit if any draft for this date was already sent
     draft_date = old_draft.get("date", "")
     for other_id, other_draft in drafts.items():
-        if other_id != draft_id and other_draft.get("date") == draft_date and other_draft.get("status") == "sent":
+        if other_id != draft_id and not old_draft.get("test_mode") and not other_draft.get("test_mode") and other_draft.get("date") == draft_date and other_draft.get("status") == "sent":
             raise HTTPException(
                 status_code=409,
                 detail=f"Emails for {draft_date} have already been sent. Cannot create revised draft."
@@ -533,6 +546,8 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
         "recipient_count": 0,
         "send_errors": [],
         "revised_from": draft_id,
+        "test_mode": bool(old_draft.get("test_mode")),
+        "test_recipient": old_draft.get("test_recipient"),
     }
     save_drafts(drafts)
     
@@ -549,17 +564,18 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:{BRAND_NAVY};border-radius:10px;margin-bottom:16px;">
 <tr><td style="padding:20px 24px;text-align:center;">
 <p style="margin:0 0 8px 0;font-size:14px;color:{BRAND_SAND};font-weight:700;letter-spacing:1px;text-transform:uppercase;">Revised Draft - Pending Approval</p>
-<p style="margin:0 0 14px 0;font-size:13px;color:#a0aec0;">Changes were made via the approval page. Review and approve to send to beta testers.</p>
+<p style="margin:0 0 14px 0;font-size:13px;color:#a0aec0;">Changes were made via the approval page. Review and approve to send to the intended recipients.</p>
 <a href="https://lhos-beta-email-production.up.railway.app{approval_url}" style="display:inline-block;background-color:{BRAND_AQUA};color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:14px 40px;border-radius:8px;">Review Revised Draft</a>
 </td></tr></table></div>
 {edit.html_body.replace("UNSUB_URL_PLACEHOLDER", "https://lhos-unsubscribe-production.up.railway.app/?email=preview").replace("RECIPIENT_NAME_PLACEHOLDER", "Hello Beta Tester!")}
 </body></html>"""
         
-        approver_emails = ",".join(APPROVERS)
+        approver_emails = old_draft.get("test_recipient") if old_draft.get("test_mode") else ",".join(APPROVERS)
+        review_prefix = "[TEST REVIEW]" if old_draft.get("test_mode") else "[REVIEW]"
         send_gmail(
             access_token,
             to=approver_emails,
-            subject=f"[REVIEW] {edit.subject} (Revised via Editor)",
+            subject=f"{review_prefix} {edit.subject} (Revised via Editor)",
             html_body=approver_html,
             sender_email=SENDER_EMAIL,
             sender_name=SENDER_NAME,
@@ -580,19 +596,25 @@ def send_draft_safely(draft_id: str, approver: str):
     if draft.get("status") == "revised": raise HTTPException(status_code=409, detail="Draft was superseded")
     draft_date = draft.get("date", "")
     for oid, other in drafts.items():
-        if oid != draft_id and other.get("date") == draft_date and other.get("status") == "sent":
+        if oid != draft_id and not draft.get("test_mode") and not other.get("test_mode") and other.get("date") == draft_date and other.get("status") == "sent":
             raise HTTPException(status_code=409, detail=f"Emails for {draft_date} already sent via draft {oid}")
     access_token = get_google_access_token()
-    group_id = get_contact_group_id(access_token, CONTACT_GROUP_NAME)
-    if not group_id: raise HTTPException(status_code=500, detail=f"Contact group '{CONTACT_GROUP_NAME}' not found")
-    contacts = get_contacts_in_group(access_token, group_id)
-    if not contacts: raise HTTPException(status_code=500, detail="No contacts found in beta group")
-    try: suppressed = get_suppression_list()
-    except Exception as exc: raise HTTPException(status_code=503, detail=str(exc))
+    if draft.get("test_mode"):
+        if draft.get("test_recipient") != TEST_RECIPIENT:
+            raise HTTPException(status_code=400, detail="Invalid test recipient")
+        contacts = [{"email": TEST_RECIPIENT, "name": "Bobby"}]
+        suppressed = []
+    else:
+        group_id = get_contact_group_id(access_token, CONTACT_GROUP_NAME)
+        if not group_id: raise HTTPException(status_code=500, detail=f"Contact group '{CONTACT_GROUP_NAME}' not found")
+        contacts = get_contacts_in_group(access_token, group_id)
+        if not contacts: raise HTTPException(status_code=500, detail="No contacts found in beta group")
+        try: suppressed = get_suppression_list()
+        except Exception as exc: raise HTTPException(status_code=503, detail=str(exc))
     try: date_key = datetime.strptime(draft_date, "%B %d, %Y").strftime("%Y-%m-%d")
     except Exception: raise HTTPException(status_code=400, detail="Draft date is invalid")
     draft.update({"status":"sending","approved_by":approver,"approved_at":draft.get("approved_at") or datetime.now(timezone.utc).isoformat()}); save_drafts(drafts)
-    ledger_file = LEDGER_DIR / f"{date_key}.json"
+    ledger_file = LEDGER_DIR / (f"test-{draft_id}.json" if draft.get("test_mode") else f"{date_key}.json")
     def precheck(addr, subject): return gmail_exact_sent(access_token, addr, subject, date_key)
     def send_one(addr, subject, body): return send_gmail(access_token, addr, subject, body, SENDER_EMAIL, SENDER_NAME)
     result = deliver_once(date_key=date_key, subject=draft["subject"], html_body=draft["html_body"], contacts=contacts, suppressed=suppressed, ledger_file=ledger_file, already_sent=precheck, send_one=send_one, unsubscribe_base=UNSUBSCRIBE_BASE_URL)
@@ -607,6 +629,36 @@ async def approve_and_send(draft_id: str, request: Request, token: str = ""):
         verify_approval(draft_id, token)
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     return send_draft_safely(draft_id, body.get("approver", "unknown"))
+
+class TestReviewCreate(BaseModel):
+    subject: str
+    html_body: str
+    text_body: str = ""
+    date: str
+
+@app.post("/api/lhos/test-review")
+async def create_isolated_test_review(payload: TestReviewCreate, request: Request):
+    """Create a signed test draft and send its review to Bobby only."""
+    require_automation(request)
+    result = create_draft_record(payload.subject, payload.html_body, payload.text_body, payload.date, True, TEST_RECIPIENT)
+    approval_path = result["approval_url"]
+    domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "lhos-beta-email-production.up.railway.app")
+    base = domain if domain.startswith("http") else "https://" + domain
+    preview = payload.html_body.replace("UNSUB_URL_PLACEHOLDER", f"{UNSUBSCRIBE_BASE_URL}/?email={TEST_RECIPIENT}").replace("RECIPIENT_NAME_PLACEHOLDER", "Bobby")
+    review_html = f'''<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f8f9fa;font-family:Nunito,Arial,sans-serif;">
+<div style="background:{BRAND_NAVY};padding:24px;text-align:center;color:#fff;">
+<div style="font-size:13px;font-weight:800;letter-spacing:1px;color:{BRAND_SAND};">ISOLATED APPROVAL WORKFLOW TEST</div>
+<p style="margin:10px 0 16px;">Approval or revision can send only to {TEST_RECIPIENT}. Beta contacts are not connected to this test draft.</p>
+<a href="{base}{approval_path}" style="display:inline-block;background:{BRAND_AQUA};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:800;">Review Test Draft</a>
+</div>{preview}</body></html>'''
+    try:
+        access_token = get_google_access_token()
+        sent = send_gmail(access_token, TEST_RECIPIENT, f"[TEST REVIEW] {payload.subject}", review_html, SENDER_EMAIL, SENDER_NAME)
+    except Exception:
+        drafts = load_drafts(); drafts.pop(result["draft_id"], None); save_drafts(drafts)
+        raise
+    return {**result, "test_mode": True, "test_recipient": TEST_RECIPIENT, "review_message_id": sent.get("id")}
 
 # n8n cloud orchestration router (authenticated by X-LHOS-Automation-Token)
 from cloud_automation import configure_router
