@@ -89,6 +89,23 @@ def gmail_subject_sent_any(token,subject,date_key):
         if dec_header(h.get("subject"))==subject:return True
     return False
 
+def docx_text(data):
+    with zipfile.ZipFile(BytesIO(data)) as z:
+        import xml.etree.ElementTree as ETX
+        root=ETX.fromstring(z.read("word/document.xml"));ns='{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+        return '\n'.join(''.join(t.text or '' for t in p.iter(ns+'t')) for p in root.iter(ns+'p')).strip()
+
+def gmail_docx_attachments(token,msg_id,payload):
+    texts=[]
+    def walk(part):
+        filename=(part.get('filename') or '').lower();aid=part.get('body',{}).get('attachmentId')
+        if aid and filename.endswith('.docx'):
+            r=httpx.get(f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}/attachments/{aid}",headers=google_headers(token),timeout=30)
+            if r.status_code!=200:raise RuntimeError(f"Gmail attachment fetch failed: {r.status_code}")
+            data=base64.urlsafe_b64decode(r.json().get('data','')+'===');texts.append(docx_text(data))
+        for child in part.get('parts',[]) or []:walk(child)
+    walk(payload);return '\n'.join(x for x in texts if x)
+
 def drive_source(token,date_key):
     dt=datetime.strptime(date_key,"%Y-%m-%d");name=dt.strftime("%y%m%d")+".docx";q=f"'{DRIVE_FOLDER_ID}' in parents and trashed=false and name='{name}'"
     r=httpx.get("https://www.googleapis.com/drive/v3/files",headers=google_headers(token),params={"q":q,"fields":"files(id,name,size,modifiedTime,lastModifyingUser(displayName,emailAddress))"},timeout=30)
@@ -97,10 +114,7 @@ def drive_source(token,date_key):
     if not files:return None,"",{"name":name,"missing":True}
     f=files[0];r=httpx.get(f"https://www.googleapis.com/drive/v3/files/{f['id']}",headers=google_headers(token),params={"alt":"media"},timeout=60)
     if r.status_code!=200:raise RuntimeError(f"Drive download failed: {r.status_code}")
-    with zipfile.ZipFile(BytesIO(r.content)) as z:
-        import xml.etree.ElementTree as ETX
-        root=ETX.fromstring(z.read("word/document.xml"));ns='{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
-        raw='\n'.join(''.join(t.text or '' for t in p.iter(ns+'t')) for p in root.iter(ns+'p')).strip()
+    raw=docx_text(r.content)
     return f,raw,f
 
 def paragraphize(lines):
@@ -178,6 +192,8 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     def prepare_impl(dry_run=False,force=False):
         date_key,date_display=current()
         if END_DATE and date_key>END_DATE:return {"action":"stopped","reason":"end_date","end_date":END_DATE}
+        st=state_all();existing=st.get(date_key,{})
+        if not force and existing.get("stage") in ("review_sent","approved","sending","partial","sent","sent_external"):return {"action":"daily_complete" if existing.get("stage") in ("sent","sent_external") else "no_op","stage":existing.get("stage"),"draft_id":existing.get("draft_id")}
         token=get_token();subject=f"LifeHouse OS Beta Update - {date_display}"
         if gmail_subject_sent_any(token,subject,date_key):
             if not dry_run:
@@ -209,6 +225,16 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         old_draft["status"]="revised";old_draft["revised_at"]=now_et().isoformat();save_drafts(drafts)
         did=new["draft_id"];count=int(state.get("revision_count",0))+1;review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Revision {count})";send_email(token,','.join(approvers),review_subject,make_review(date_display,new.get("approval_url",f"/lhos/approve/{did}"),email_html,f"Revision {count} applied from {actor}"),sender_email,sender_name)
         state.update({"stage":"review_sent","draft_id":did,"review_subject":review_subject,"raw_content":revised,"revision_count":count,"approved_by":None,"approval_channel":None,"last_revision_by":actor,"last_revision_channel":channel,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"revised_review_sent","draft_id":did,"revision_count":count,"actor":actor}
+    @router.get("/connectors")
+    async def connectors(req:Request):
+        auth(req);token=get_token();checks={}
+        for name,url,params in [
+            ("gmail","https://gmail.googleapis.com/gmail/v1/users/me/profile",None),
+            ("drive","https://www.googleapis.com/drive/v3/about",{"fields":"user(displayName)"}),
+            ("contacts","https://people.googleapis.com/v1/contactGroups",{"pageSize":1,"groupFields":"name"})]:
+            r=httpx.get(url,headers=google_headers(token),params=params,timeout=30);checks[name]=r.status_code
+            if r.status_code!=200:raise HTTPException(status_code=503,detail={"connector":name,"status":r.status_code,"body":r.text[:300]})
+        return {"status":"ok","checks":checks}
     @router.get("/status")
     async def status(req:Request):
         auth(req);date_key,_=current();return {"date":date_key,"state":state_all().get(date_key),"persistent_data":str(DATA_DIR),"end_date":END_DATE or None}
@@ -222,40 +248,53 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
         with automation_lock():
-            auth(req);date_key,date_display=current();st=state_all();state=st.get(date_key)
+            date_key,date_display=current();st=state_all();state=st.get(date_key)
             if not state:return {"action":"no_state"}
-            token=get_token();processed=set(load(PROCESSED_FILE,[]))
-            if state.get('stage')=='hold':
-                subj=state.get('action_subject',f"[ACTION REQUIRED] LifeHouse OS content needed - {date_display}")
-                msgs=gmail_search(token,f'subject:"{subj}" after:{date_key.replace("-","/")}',50)
-                for item in msgs:
-                    if item['id'] in processed:continue
-                    msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=h.get('from','').lower()
-                    if 'kristina' not in frm:continue
-                    body=clean_reply(extract_gmail_body(msg.get('payload',{})))
-                    if dry_run:return {"action":"would_process_kristina_reply","message_id":item['id'],"chars":len(body)}
-                    if re.search(r'\b(updated|uploaded|ready|revised|fixed)\b',body,re.I) and len(body)<500:
-                        result=prepare_impl(force=True)
+            if state.get("stage") in ("sent","sent_external"):return {"action":"daily_complete","stage":state.get("stage"),"draft_id":state.get("draft_id")}
+            token=get_token();processed=set(load(PROCESSED_FILE,[]));allowed={a.strip().lower() for a in approvers}
+            auth_query=' '.join('from:'+a for a in sorted(allowed));queries=[f'in:inbox after:{date_key.replace("-","/")} {{{auth_query}}}',f'in:inbox after:{date_key.replace("-","/")} {{subject:"LifeHouse OS" subject:"beta email" subject:LHOS}}']
+            ids={}
+            for q in queries:
+                for item in gmail_search(token,q,100):ids[item['id']]=item
+            records=[]
+            for mid in ids:
+                if mid in processed:continue
+                msg=gmail_get(token,mid);h=headers_map(msg.get('payload',{}));addr=parseaddr(h.get('from',''))[1].strip().lower();subj=dec_header(h.get('subject',''));body=clean_reply(extract_gmail_body(msg.get('payload',{}))+'\n'+gmail_docx_attachments(token,mid,msg.get('payload',{})));records.append({"id":mid,"internal":int(msg.get("internalDate",0)),"addr":addr,"subject":subj,"body":body})
+            records.sort(key=lambda x:(x["internal"],x["id"]));actions=[]
+            for rec in records:
+                current_state=state_all().get(date_key) or state;stage=current_state.get("stage");addr=rec["addr"];body=rec["body"];subj=rec["subject"];combined=(subj+'\n'+body).lower();authorized=addr in allowed
+                relevant=bool(re.search(r'\b(lifehouse|lhos|beta(?: email| update)?|daily briefing)\b',combined,re.I)) or (current_state.get('review_subject','').lower() in subj.lower() if current_state.get('review_subject') else False) or (current_state.get('action_subject','').lower() in subj.lower() if current_state.get('action_subject') else False)
+                if not authorized:
+                    if not dry_run:
+                        current_state["ignored_unauthorized_inbox_count"]=int(current_state.get("ignored_unauthorized_inbox_count",0))+1;current_state["last_ignored_unauthorized_at"]=now_et().isoformat();st=state_all();st[date_key]=current_state;save_state(st);processed.add(rec["id"])
+                    actions.append({"action":"would_ignore_unauthorized" if dry_run else "ignored_unauthorized","message_id":rec["id"]});continue
+                if stage in ("sent","sent_external"):break
+                if dry_run and (relevant or stage=="hold"):
+                    return {"action":"would_process_inbox","message_id":rec["id"],"stage":stage,"from":addr,"classification":classify_instruction(body)}
+                if stage=="hold":
+                    ready=bool(re.search(r'\b(updated|uploaded|ready|revised|fixed)\b',body,re.I));ok_content,_=validate_daily_content(body)
+                    if ready and len(body)<500 and (relevant or 'content' in combined):result=prepare_impl(force=True)
+                    elif ok_content:result=prepare_from_raw(date_key,date_display,body,{"type":"authorized_direct_email","message_id":rec["id"],"from":addr},token,False,f"Updated content received from {addr}")
                     else:
-                        result=prepare_from_raw(date_key,date_display,body,{"type":"kristina_reply","message_id":item['id']},token,False,"Updated content received from Kristina")
-                    processed.add(item['id']);atomic_json_write(PROCESSED_FILE,sorted(processed));return result
-                return {"action":"no_reply","stage":"hold"}
-            if state.get('stage') in ('review_sent','approved'):
-                drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
-                if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
-                msgs=gmail_search(token,f'subject:"{state.get("review_subject")}" after:{date_key.replace("-","/")}',50)
-                for item in msgs:
-                    if item['id'] in processed:continue
-                    msg=gmail_get(token,item['id']);h=headers_map(msg.get('payload',{}));frm=parseaddr(h.get('from',''))[1].strip().lower()
-                    if frm not in {a.strip().lower() for a in approvers}:continue
-                    body=clean_reply(extract_gmail_body(msg.get('payload',{})));kind=classify_instruction(body)
-                    if dry_run:return {"action":f"would_{kind}","message_id":item['id']}
-                    result=apply_instruction(date_key,date_display,state,frm,body,token,"email")
-                    if result.get("action")=="clarification_needed":
-                        clarification_subject=f"[CLARIFICATION] {state.get('review_subject')}";clarification_body='<p>Hi,</p><p>I could not determine whether your reply was an approval or a revision request. Please reply with either <strong>approve/send</strong>, <strong>hold</strong>, or the exact change you want made.</p><p>Warm regards,<br>Iris</p>';send_email(token,frm,clarification_subject,clarification_body,sender_email,sender_name)
-                    processed.add(item['id']);atomic_json_write(PROCESSED_FILE,sorted(processed));return result
-                return {"action":"no_reply","stage":state.get('stage')}
-            return {"action":"no_op","stage":state.get('stage')}
+                        processed.add(rec["id"]);actions.append({"action":"ignored_unrelated_or_incomplete","message_id":rec["id"]});continue
+                elif stage in ("review_sent","approved"):
+                    kind=classify_instruction(body);thread_bound=bool(current_state.get('review_subject') and current_state.get('review_subject').lower() in subj.lower())
+                    if not (thread_bound or relevant):processed.add(rec["id"]);actions.append({"action":"ignored_unrelated","message_id":rec["id"]});continue
+                    if dry_run:return {"action":f"would_{kind}","message_id":rec['id'],"source":"inbox"}
+                    ok_content,_=validate_daily_content(body)
+                    if ok_content and len(body)>=180:
+                        result=prepare_from_raw(date_key,date_display,body,{"type":"authorized_replacement_email","message_id":rec["id"],"from":addr},token,False,f"Replacement content received from {addr}")
+                        drafts=load_drafts();old=drafts.get(current_state.get('draft_id'))
+                        if old and old.get('status')!='sent':old['status']='revised';save_drafts(drafts)
+                    else:
+                        result=apply_instruction(date_key,date_display,current_state,addr,body,token,"email")
+                        if result.get("action")=="clarification_needed":
+                            clarification_subject=f"[CLARIFICATION] {current_state.get('review_subject')}";clarification_body='<p>Hi,</p><p>I could not determine whether your message was an approval or a revision request. Please reply with either <strong>approve/send</strong>, <strong>hold</strong>, or the exact change you want made.</p><p>Warm regards,<br>Iris</p>';send_email(token,addr,clarification_subject,clarification_body,sender_email,sender_name)
+                else:processed.add(rec["id"]);actions.append({"action":"no_op","stage":stage,"message_id":rec["id"]});continue
+                processed.add(rec["id"]);actions.append({**result,"message_id":rec["id"]})
+            if not dry_run:atomic_json_write(PROCESSED_FILE,sorted(processed))
+            if actions:return {"action":"inbox_processed","processed_count":len(actions),"results":actions}
+            return {"action":"no_relevant_inbox","stage":state.get("stage")}
     @router.post("/decision")
     async def decision(req:Request,dry_run:bool=False):
         auth(req)
