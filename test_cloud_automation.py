@@ -138,4 +138,17 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'now_et',return_value=at):
    a=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'});b=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(a.json()['action'],'report_sent');self.assertEqual(b.json()['action'],'already_reported');self.assertEqual(len(sent),1)
+
+ def test_close_out_flags_failed_closed_with_valid_content_as_incident(self):
+  at=ca.now_et().replace(hour=16,minute=5,second=0,microsecond=0);date=at.strftime('%Y-%m-%d')
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'not_sent','content_valid':True,'draft_id':'id','not_sent_reason':'No approval by deadline.'}});sent=[]
+  app=self.app(send_email=lambda *a:sent.append(a))
+  with patch.object(ca,'now_et',return_value=at):r=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'})
+  self.assertTrue(r.json()['incident'],'valid content that never shipped must raise an incident')
+ def test_close_out_no_incident_when_delivered(self):
+  at=ca.now_et().replace(hour=16,minute=5,second=0,microsecond=0);date=at.strftime('%Y-%m-%d')
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'sent','content_valid':True,'draft_id':'id'}})
+  app=self.app(send_email=lambda *a:None)
+  with patch.object(ca,'now_et',return_value=at):r=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'})
+  self.assertFalse(r.json()['incident'])
 if __name__=='__main__':unittest.main()

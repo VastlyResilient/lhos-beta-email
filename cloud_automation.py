@@ -407,7 +407,9 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 if stt in counts:counts[stt]+=1
                 elif stt:counts["reserved"]+=1
             terminal={"sent":"DELIVERED","sent_external":"DELIVERED","not_sent":"NOT SENT (failed closed)","hold":"HELD - content missing or invalid","approved":"APPROVED, DELIVERY INCOMPLETE","partial":"PARTIAL DELIVERY","review_sent":"AWAITING APPROVAL","no_state":"NO ACTIVITY RECORDED"}.get(stage,stage.upper())
-            incident=stage in ("approved","partial","sending","review_sent","hold","no_state")
+            # A failed-closed day whose content WAS valid still needs human attention:
+            # the edition did not reach beta testers even though usable content existed.
+            incident=stage in ("approved","partial","sending","review_sent","hold","no_state") or (stage=="not_sent" and bool(state.get("content_valid")))
             hb=load(HEARTBEAT_FILE,{})
             rows="".join(f"<tr><td style='padding:4px 12px 4px 0'>{html.escape(k)}</td><td style='padding:4px 0'><strong>{v}</strong></td></tr>" for k,v in [
                 ("Business date",date_display),("Send policy",SEND_POLICY),("Outcome",terminal),
