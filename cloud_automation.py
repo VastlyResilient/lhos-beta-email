@@ -21,7 +21,7 @@ AUTOMATION_TOKEN=os.getenv("LHOS_AUTOMATION_TOKEN","")
 END_DATE=os.getenv("LHOS_END_DATE","").strip()
 GLM_API_KEY=os.getenv("GLM_API_KEY","")
 GLM_BASE_URL=os.getenv("GLM_BASE_URL","https://api.z.ai/api/paas/v4")
-DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
+DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";HEARTBEAT_FILE=DATA_DIR/"automation_heartbeat.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
 KRISTINA="kristina@freedomforgeai.com"
 APPROVAL_WORDS=("approved","approve","looks good","send it","send the email","good to send","go ahead","confirmed","confirm","lgtm","ship it","ship this","release it","ready to send")
 REVISION_WORDS=("change","revise","revision","edit","replace","remove","add","fix","correct","update","rewrite","adjust")
@@ -173,6 +173,8 @@ def revise_with_glm(raw,feedback):
 def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts,send_draft,approve_draft,approvers,approval_senders,public_url,sender_email,sender_name):
     router=APIRouter(prefix="/api/lhos/automation")
     def state_all():return load(STATE_FILE,{})
+    def heartbeat(name):
+        h=load(HEARTBEAT_FILE,{});h[name]=now_et().isoformat();atomic_json_write(HEARTBEAT_FILE,h);return h
     def save_state(d):atomic_json_write(STATE_FILE,d)
     def current():
         now=now_et();return now.strftime("%Y-%m-%d"),now.strftime("%B %d, %Y")
@@ -237,18 +239,18 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         return {"status":"ok","checks":checks}
     @router.get("/status")
     async def status(req:Request):
-        auth(req);date_key,_=current();return {"date":date_key,"state":state_all().get(date_key),"persistent_data":str(DATA_DIR),"end_date":END_DATE or None}
+        auth(req);date_key,_=current();return {"date":date_key,"state":state_all().get(date_key),"heartbeat":load(HEARTBEAT_FILE,{}),"persistent_data":str(DATA_DIR),"end_date":END_DATE or None}
     @router.post("/prepare")
     async def prepare(req:Request,dry_run:bool=False):
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
-        with automation_lock(): return prepare_impl(dry_run=dry_run)
+        with automation_lock(): heartbeat("prepare");return prepare_impl(dry_run=dry_run)
     @router.post("/check-replies")
     async def check_replies(req:Request,dry_run:bool=False):
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
         with automation_lock():
-            date_key,date_display=current();st=state_all();state=st.get(date_key)
+            heartbeat("check_replies");date_key,date_display=current();st=state_all();state=st.get(date_key)
             if not state:return {"action":"no_state"}
             if state.get("stage") in ("sent","sent_external"):return {"action":"daily_complete","stage":state.get("stage"),"draft_id":state.get("draft_id")}
             token=get_token();processed=set(load(PROCESSED_FILE,[]));allowed={a.strip().lower() for a in approval_senders}
@@ -346,6 +348,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def auto_send(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
+            heartbeat("auto_send")
             if now_et().hour < 15:return {"action":"too_early","scheduled_for":"15:00 America/New_York"}
             date_key,date_display=current();st=state_all();state=st.get(date_key);token=get_token()
             if not state:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",token,dry_run)
@@ -362,7 +365,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def reconcile(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            date_key,_=current();st=state_all();state=st.get(date_key)
+            heartbeat("reconcile");date_key,_=current();st=state_all();state=st.get(date_key)
             if not state:return {"action":"no_state"}
             drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
             if draft.get("status")=="sent":
@@ -376,13 +379,21 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def watchdog(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            date_key,date_display=current();now=now_et();state=state_all().get(date_key);reason=None
-            if now.hour < 15:return {"action":"too_early","time":now.isoformat()}
-            if not state:reason="No cloud automation state exists after 3:00 PM ET; the preparation schedule may have been missed."
-            elif state.get("stage") in ("sending","partial","approved"):
-                reason=f"Authorized batch is stuck in {state.get('stage')} and requires reconciliation."
-            elif state.get("stage") in ("review_sent","hold"):
-                reason=f"The 3:00 PM deadline handler did not finalize stage {state.get('stage')}."
+            date_key,date_display=current();now=now_et();state=state_all().get(date_key);hb=load(HEARTBEAT_FILE,{});reason=None
+            if now.hour < 7:return {"action":"too_early","time":now.isoformat()}
+            if 7 <= now.hour < 15:
+                if state and state.get("stage") in ("sent","sent_external"):return {"action":"healthy_or_expected_terminal_state","stage":state.get("stage")}
+                stamp=hb.get("prepare");last=None
+                if stamp:
+                    try:last=datetime.fromisoformat(stamp)
+                    except:pass
+                stale=not last or (now-last).total_seconds()>240
+                if (now.hour>7 or now.minute>=10) and not state:reason="No daily cloud state exists more than 10 minutes after the 7 AM start; n8n may not be reaching Railway."
+                elif stale:reason="The n8n preparation heartbeat is missing or more than four minutes stale during the active window."
+                else:return {"action":"healthy_active_window","stage":state.get("stage") if state else None,"last_prepare_at":stamp}
+            elif not state:reason="No cloud automation state exists after 3:00 PM ET; the preparation schedule may have been missed."
+            elif state.get("stage") in ("sending","partial","approved"):reason=f"Authorized batch is stuck in {state.get('stage')} and requires reconciliation."
+            elif state.get("stage") in ("review_sent","hold"):reason=f"The 3:00 PM deadline handler did not finalize stage {state.get('stage')}."
             if not reason:return {"action":"healthy_or_expected_terminal_state","stage":state.get("stage") if state else None}
             key=hashlib.sha256((date_key+reason).encode()).hexdigest();alerts=load(ALERTS_FILE,{})
             if alerts.get(key):return {"action":"alert_already_sent","reason":reason}

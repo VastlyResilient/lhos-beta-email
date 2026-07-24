@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import cloud_automation as ca
 class CloudTests(unittest.TestCase):
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
+  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.HEARTBEAT_FILE=root/'heartbeat.json';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
  def tearDown(self):self.t.cleanup()
  def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None):
   app=FastAPI(); drafts=dict(initial_drafts or {}); self._drafts=drafts
@@ -88,4 +88,12 @@ class CloudTests(unittest.TestCase):
   xml=b'<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Daily Beta Content</w:t></w:r></w:p><w:p><w:r><w:t>Concrete update details</w:t></w:r></w:p></w:body></w:document>';buf=io.BytesIO()
   with zipfile.ZipFile(buf,'w') as z:z.writestr('word/document.xml',xml)
   self.assertEqual(ca.docx_text(buf.getvalue()),'Daily Beta Content\nConcrete update details')
+ def test_watchdog_detects_missing_active_window_heartbeat(self):
+  at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);app=self.app()
+  with patch.object(ca,'now_et',return_value=at8):r=app.post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'would_alert_bobby');self.assertIn('No daily cloud state',r.json()['reason'])
+ def test_watchdog_accepts_fresh_active_heartbeat(self):
+  at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);date=at8.strftime('%Y-%m-%d');ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'review_sent','content_valid':True}});ca.atomic_json_write(ca.HEARTBEAT_FILE,{'prepare':at8.isoformat()});app=self.app()
+  with patch.object(ca,'now_et',return_value=at8):r=app.post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'healthy_active_window')
 if __name__=='__main__':unittest.main()
