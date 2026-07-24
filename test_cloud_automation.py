@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import cloud_automation as ca
 class CloudTests(unittest.TestCase):
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.HEARTBEAT_FILE=root/'heartbeat.json';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
+  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.HEARTBEAT_FILE=root/'heartbeat.json';ca.REPORTS_FILE=root/'reports.json';ca.SEND_POLICY='ON_APPROVAL';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
  def tearDown(self):self.t.cleanup()
  def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None):
   app=FastAPI(); drafts=dict(initial_drafts or {}); self._drafts=drafts
@@ -96,4 +96,46 @@ class CloudTests(unittest.TestCase):
   at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);date=at8.strftime('%Y-%m-%d');ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'review_sent','content_valid':True}});ca.atomic_json_write(ca.HEARTBEAT_FILE,{'prepare':at8.isoformat()});app=self.app()
   with patch.object(ca,'now_et',return_value=at8):r=app.post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(r.json()['action'],'healthy_active_window')
+
+ def _approval_env(self,at,body='Approved, send it to the beta testers.'):
+  date=at.strftime('%Y-%m-%d')
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'July 24, 2026','stage':'review_sent','content_valid':True,'draft_id':'id','subject':'S','review_subject':'[REVIEW] X','raw_content':'body text'}})
+  raw=base64.urlsafe_b64encode(body.encode()).decode()
+  return date,{'internalDate':'1000','payload':{'headers':[{'name':'From','value':'a@example.com'},{'name':'Subject','value':'Re: [REVIEW] X'}],'mimeType':'text/plain','body':{'data':raw}}}
+ def test_on_approval_sends_immediately(self):
+  at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);date,msg=self._approval_env(at);calls=[]
+  drafts={'id':{'id':'id','subject':'S','html_body':'<p>x</p>','text_body':'t','date':'July 24, 2026','status':'approved'}}
+  def sd(did,actor):calls.append((did,actor));return {'status':'sent','sent':27}
+  app=self.app(send_email=lambda *a:None,send_draft=sd,initial_drafts=drafts)
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'SEND_POLICY','ON_APPROVAL'),patch.object(ca,'gmail_search',return_value=[{'id':'m1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200);acts=[a.get('action') for a in r.json().get('results',r.json() if isinstance(r.json(),list) else [])] if isinstance(r.json(),dict) else []
+  self.assertEqual(len(calls),1,f'expected exactly one send, got {calls} :: {r.json()}');self.assertEqual(calls[0][0],'id')
+ def test_at_gate_records_without_sending(self):
+  at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);date,msg=self._approval_env(at)
+  drafts={'id':{'id':'id','subject':'S','html_body':'<p>x</p>','text_body':'t','date':'July 24, 2026','status':'approved'}}
+  app=self.app(send_email=lambda *a:None,initial_drafts=drafts)  # send_draft raises if called
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'SEND_POLICY','AT_GATE'),patch.object(ca,'gmail_search',return_value=[{'id':'m1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200)
+ def test_on_approval_refuses_when_revision_changed_draft(self):
+  at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);date,msg=self._approval_env(at)
+  drafts={'id':{'id':'id','subject':'S','html_body':'<p>x</p>','text_body':'t','date':'July 24, 2026','status':'revised'}}
+  app=self.app(send_email=lambda *a:None,initial_drafts=drafts,approve_draft=lambda *a,**k:{'status':'approved'})
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'SEND_POLICY','ON_APPROVAL'),patch.object(ca,'gmail_search',return_value=[{'id':'m1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200)
+ def test_close_out_reports_incident_when_not_delivered(self):
+  at=ca.now_et().replace(hour=15,minute=30,second=0,microsecond=0);date=at.strftime('%Y-%m-%d')
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'review_sent','content_valid':True,'draft_id':'id'}});sent=[]
+  app=self.app(send_email=lambda *a:sent.append(a))
+  with patch.object(ca,'now_et',return_value=at):r=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'report_sent');self.assertTrue(r.json()['incident']);self.assertEqual(len(sent),1)
+ def test_close_out_is_sent_once_per_day(self):
+  at=ca.now_et().replace(hour=15,minute=30,second=0,microsecond=0);date=at.strftime('%Y-%m-%d')
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'sent','content_valid':True,'draft_id':'id'}});sent=[]
+  app=self.app(send_email=lambda *a:sent.append(a))
+  with patch.object(ca,'now_et',return_value=at):
+   a=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'});b=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(a.json()['action'],'report_sent');self.assertEqual(b.json()['action'],'already_reported');self.assertEqual(len(sent),1)
 if __name__=='__main__':unittest.main()

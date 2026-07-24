@@ -19,9 +19,11 @@ ET=ZoneInfo("America/New_York")
 DRIVE_FOLDER_ID=os.getenv("LHOS_DRIVE_FOLDER_ID","1_u-jU56xvMCYO-yNmyAuZxkFuPVn-LHF")
 AUTOMATION_TOKEN=os.getenv("LHOS_AUTOMATION_TOKEN","")
 END_DATE=os.getenv("LHOS_END_DATE","").strip()
+SEND_POLICY=os.getenv("SEND_POLICY","ON_APPROVAL").strip().upper()
+if SEND_POLICY not in ("ON_APPROVAL","AT_GATE"):SEND_POLICY="ON_APPROVAL"
 GLM_API_KEY=os.getenv("GLM_API_KEY","")
 GLM_BASE_URL=os.getenv("GLM_BASE_URL","https://api.z.ai/api/paas/v4")
-DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";HEARTBEAT_FILE=DATA_DIR/"automation_heartbeat.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
+DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";REPORTS_FILE=DATA_DIR/"daily_reports.json";HEARTBEAT_FILE=DATA_DIR/"automation_heartbeat.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
 KRISTINA="kristina@freedomforgeai.com"
 APPROVAL_WORDS=("approved","approve","looks good","send it","send the email","good to send","go ahead","confirmed","confirm","lgtm","ship it","ship this","release it","ready to send")
 REVISION_WORDS=("change","revise","revision","edit","replace","remove","add","fix","correct","update","rewrite","adjust")
@@ -217,7 +219,20 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         kind=classify_instruction(text);st=state_all();drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
         if not draft:return {"action":"draft_missing","kind":kind}
         if kind=="approve":
-            result=approve_draft(state["draft_id"],f"{actor} via {channel}");state.update({"stage":"approved","approved_by":actor,"approval_channel":channel,"approval_text":text[:1000],"approved_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"approval_recorded","scheduled_for":"15:00 America/New_York","draft_id":state["draft_id"],"actor":actor,**result}
+            approved_draft_id=state["draft_id"]
+            result=approve_draft(approved_draft_id,f"{actor} via {channel}");state.update({"stage":"approved","approved_by":actor,"approval_channel":channel,"approval_text":text[:1000],"approved_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st)
+            if SEND_POLICY!="ON_APPROVAL":
+                return {"action":"approval_recorded","send_policy":SEND_POLICY,"scheduled_for":"15:00 America/New_York","draft_id":approved_draft_id,"actor":actor,**result}
+            # ON_APPROVAL: deliver now, but only the exact approved revision and only if still valid.
+            fresh=state_all().get(date_key) or {}
+            if fresh.get("draft_id")!=approved_draft_id or fresh.get("stage")!="approved" or not fresh.get("content_valid"):
+                return {"action":"approval_recorded_not_sent","send_policy":SEND_POLICY,"reason":"draft or state changed after approval","draft_id":approved_draft_id,"actor":actor}
+            current_draft=load_drafts().get(approved_draft_id,{})
+            if current_draft.get("status")!="approved":
+                return {"action":"approval_recorded_not_sent","send_policy":SEND_POLICY,"reason":f"draft status {current_draft.get('status')}","draft_id":approved_draft_id,"actor":actor}
+            send_result=send_draft(approved_draft_id,f"{actor} via {channel}")
+            st=state_all();state=st.get(date_key,state);state.update({"stage":send_result.get("status","partial"),"sent_trigger":"on_approval","updated_at":now_et().isoformat()});st[date_key]=state;save_state(st)
+            return {"action":"approved_and_sent","send_policy":SEND_POLICY,"draft_id":approved_draft_id,"actor":actor,**send_result}
         if kind=="hold":
             draft.update({"status":"pending_approval","approved_by":None,"approved_at":None});save_drafts(drafts);state.update({"stage":"review_sent","approved_by":None,"approval_channel":None,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"send_held","draft_id":state["draft_id"],"actor":actor}
         if kind=="ambiguous":return {"action":"clarification_needed","draft_id":state["draft_id"],"actor":actor}
@@ -357,7 +372,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             if draft.get('status')=='approved' and state.get('content_valid'):
                 state['stage']='approved';st[date_key]=state;save_state(st)
             if state.get('stage')!='approved' or draft.get('status')!='approved' or not state.get('content_valid'):
-                reason="No authorized approver gave clear final approval." if state.get('content_valid') else "The dated source was missing or invalid."
+                reason=("No authorized approver gave clear final approval." if state.get('content_valid') else "The dated source was missing or invalid.")+(f" Send policy in effect: {SEND_POLICY}." if SEND_POLICY=="ON_APPROVAL" else "")
                 return notify_not_sent(date_key,date_display,state,reason,token,dry_run)
             if dry_run:return {"action":"would_send_approved","draft_id":state.get('draft_id'),"approved_by":draft.get('approved_by')}
             result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return result
@@ -375,6 +390,37 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             if not authorized:return {"action":"no_op","stage":state.get("stage"),"draft_status":draft.get("status")}
             if dry_run:return {"action":"would_reconcile","draft_id":state.get("draft_id"),"draft_status":draft.get("status")}
             result=send_draft(state["draft_id"],draft.get("approved_by") or "reconcile@n8n");state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st[date_key]=state;save_state(st);return result
+    @router.post("/close-out")
+    async def close_out(req:Request,dry_run:bool=False):
+        auth(req)
+        with automation_lock():
+            heartbeat("close_out");date_key,date_display=current();state=state_all().get(date_key) or {};reports=load(REPORTS_FILE,{})
+            if reports.get(date_key) and not dry_run:return {"action":"already_reported","date":date_key,"stage":reports[date_key].get("stage")}
+            stage=state.get("stage") or "no_state";ledger={}
+            try:
+                led=load(DATA_DIR/"delivery_ledger.json",{});ledger=led.get(date_key) or led.get(state.get("draft_id"),{}) or {}
+            except Exception:ledger={}
+            recips=ledger.get("recipients",{}) if isinstance(ledger,dict) else {}
+            counts={"sent":0,"uncertain":0,"error":0,"reserved":0}
+            for r in (recips.values() if isinstance(recips,dict) else []):
+                stt=(r or {}).get("status") if isinstance(r,dict) else None
+                if stt in counts:counts[stt]+=1
+                elif stt:counts["reserved"]+=1
+            terminal={"sent":"DELIVERED","sent_external":"DELIVERED","not_sent":"NOT SENT (failed closed)","hold":"HELD - content missing or invalid","approved":"APPROVED, DELIVERY INCOMPLETE","partial":"PARTIAL DELIVERY","review_sent":"AWAITING APPROVAL","no_state":"NO ACTIVITY RECORDED"}.get(stage,stage.upper())
+            incident=stage in ("approved","partial","sending","review_sent","hold","no_state")
+            hb=load(HEARTBEAT_FILE,{})
+            rows="".join(f"<tr><td style='padding:4px 12px 4px 0'>{html.escape(k)}</td><td style='padding:4px 0'><strong>{v}</strong></td></tr>" for k,v in [
+                ("Business date",date_display),("Send policy",SEND_POLICY),("Outcome",terminal),
+                ("Delivered",str(counts["sent"])),("Uncertain",str(counts["uncertain"])),("Errors",str(counts["error"])),
+                ("Draft revision",str(state.get("draft_id") or "none")),("Approved by",str(state.get("approved_by") or "not approved")),
+                ("Source file",str((state.get("source") or {}).get("name") or "none")),("Last prepare heartbeat",str(hb.get("prepare") or "none"))])
+            note=("<p style='color:#b03030'><strong>An incident is open.</strong> "+html.escape(str(state.get("not_sent_reason") or "Delivery did not reach a verified terminal state; automated remediation and reconciliation are active."))+"</p>") if incident else "<p style='color:#1f7a4d'><strong>No action needed.</strong> Today's edition reached a verified terminal state.</p>"
+            subject=f"[IRIS DAILY REPORT] {date_display} - {terminal}"
+            body=f"<div style='font-family:Nunito,Arial,sans-serif;color:#0E1B33'><h2 style='color:#0E1B33'>LifeHouse OS pipeline close-out</h2>{note}<table style='border-collapse:collapse'>{rows}</table><p style='font-size:13px;color:#555'>This report is generated automatically so no one has to ask whether the edition went out.</p></div>"
+            if dry_run:return {"action":"would_report","subject":subject,"stage":stage,"counts":counts,"incident":incident}
+            send_email(get_token(),"bobbyatf@gmail.com",subject,body,sender_email,sender_name)
+            reports[date_key]={"stage":stage,"terminal":terminal,"counts":counts,"incident":incident,"reported_at":now_et().isoformat()};atomic_json_write(REPORTS_FILE,reports)
+            return {"action":"report_sent","stage":stage,"terminal":terminal,"counts":counts,"incident":incident}
     @router.post("/watchdog")
     async def watchdog(req:Request,dry_run:bool=False):
         auth(req)
