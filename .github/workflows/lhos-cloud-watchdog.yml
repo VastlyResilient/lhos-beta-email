@@ -2,8 +2,11 @@ name: LHOS Cloud Automation Watchdog
 
 on:
   schedule:
-    # Hourly across the US Eastern morning; backend applies America/New_York gates.
-    - cron: '*/10 11-20 * * *'
+    # Every 10 min across the ET active window (UTC). Off-peak minutes (:07/:17...)
+    # because GitHub delays/drops schedules that land on :00 under load.
+    - cron: '7,17,27,37,47,57 11-21 * * *'
+    # Keep-alive + off-window audit so a broken state is caught overnight.
+    - cron: '23 2 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -16,14 +19,18 @@ permissions:
 jobs:
   watchdog:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Check n8n/Railway automation state
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Detect and auto-repair known failure modes
         env:
+          N8N_BASE_URL: https://n8n-production-42eb.up.railway.app
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          LHOS_WORKFLOW_ID: VUadvfAMj6cGA7dx
+          LHOS_BACKEND_URL: https://lhos-beta-email-production.up.railway.app
           LHOS_AUTOMATION_TOKEN: ${{ secrets.LHOS_AUTOMATION_TOKEN }}
-        run: |
-          set -euo pipefail
-          curl --fail-with-body --retry 3 --retry-all-errors --retry-delay 10 \
-            --max-time 120 -X POST \
-            -H "X-LHOS-Automation-Token: ${LHOS_AUTOMATION_TOKEN}" \
-            "https://lhos-beta-email-production.up.railway.app/api/lhos/automation/watchdog"
+          HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL }}
+        run: python scripts/watchdog_remediate.py

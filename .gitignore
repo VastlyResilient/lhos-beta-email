@@ -9,3 +9,4 @@ __pycache__/
 n8n-lhos-production-workflow.json
 .approval_secret
 n8n-lhos-7-9-production.json
+.n8n_api_key
