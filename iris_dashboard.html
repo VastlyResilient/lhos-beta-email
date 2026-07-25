@@ -46,12 +46,12 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 .icon-tile.sm{width:44px;height:44px;border-radius:14px}.icon-tile.sm svg{width:22px;height:22px}
 
 /* ---------- rail ---------- */
-.rail{position:fixed;left:32px;top:44px;bottom:48px;width:118px;z-index:50;display:flex;flex-direction:column;align-items:center;padding:24px 10px 62px;border-radius:30px}
-.rail-logo{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px}
+.rail{position:fixed;left:32px;top:44px;bottom:48px;width:118px;z-index:50;display:flex;flex-direction:column;align-items:center;padding:24px 10px 100px;border-radius:30px}
+.rail-logo{display:flex;flex-direction:column;align-items:center;gap:10px;margin:14px 0 8px}
 .rail-logo .mark{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 34% 30%,rgba(115,191,255,.32),rgba(13,25,43,.5) 70%);border:1px solid rgba(199,231,255,.28);box-shadow:0 0 22px rgba(99,207,255,.22),inset 0 1px 0 rgba(255,255,255,.2);color:#eaf6ff}
 .rail-logo .mark svg{width:27px;height:27px;filter:drop-shadow(0 0 7px rgba(99,207,255,.5))}
 .rail-logo span{font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--iris-text)}
-.rail-nav{display:flex;flex-direction:column;justify-content:space-between;flex:none;width:100%;height:430px;margin:26px 0 0}
+.rail-nav{display:flex;flex-direction:column;justify-content:space-between;flex:none;width:100%;height:470px;margin:78px 0 0}
 .rail-item{display:flex;flex-direction:column;align-items:center;gap:7px;width:100%;min-height:44px;padding:11px 4px;border-radius:20px;color:var(--iris-text-muted);font-size:11.5px;letter-spacing:.04em;transition:transform 180ms ease,border-color 180ms ease,background-color 180ms ease,box-shadow 180ms ease,color 180ms ease;border:1px solid transparent}
 .rail-item svg{width:22px;height:22px}
 .rail-item:hover{color:var(--iris-text);transform:translateY(-1px)}
@@ -66,6 +66,7 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 
 /* ---------- layout ---------- */
 .shell{position:relative;margin-left:224px;padding:92px 48px 40px 0;max-width:1544px;min-height:100vh;display:flex;flex-direction:column}
+main#app{display:flex;flex-direction:column;flex:1}
 section.page{display:none;flex:1;flex-direction:column;gap:24px}
 section.page.on{display:flex}
 
