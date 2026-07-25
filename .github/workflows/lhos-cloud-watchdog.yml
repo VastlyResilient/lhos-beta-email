@@ -38,4 +38,8 @@ jobs:
           HEARTBEAT_FAIL_URL: ${{ secrets.HEARTBEAT_FAIL_URL }}
           DAILY_OUTCOME_URL: ${{ secrets.DAILY_OUTCOME_URL }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/watchdog_remediate.py

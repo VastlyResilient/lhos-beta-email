@@ -72,6 +72,89 @@ actions=[];escalate=[]
 def log(msg):
     print(msg,flush=True);actions.append(msg)
 
+
+# ---------- 0. Predictive canaries (catch "unfixable" failures BEFORE they bite) ----------
+GOOGLE_CLIENT_ID=os.environ.get("GOOGLE_CLIENT_ID","").strip()
+GOOGLE_CLIENT_SECRET=os.environ.get("GOOGLE_CLIENT_SECRET","").strip()
+GOOGLE_REFRESH_TOKEN=os.environ.get("GOOGLE_REFRESH_TOKEN","").strip()
+GH_BILLING_TOKEN=os.environ.get("GH_BILLING_TOKEN","").strip()
+
+def provider_outage(symptom):
+    """Before paging a human, check whether the symptom matches a CONFIRMED provider
+    outage. If so, the correct action is silent retry + auto-resume, not a page."""
+    import json as _j
+    checks={"railway":"https://status.railway.com/api/v2/status.json",
+            "github":"https://www.githubstatus.com/api/v2/status.json"}
+    domain={"n8n":"railway","backend":"railway","railway":"railway",
+            "gmail":"google","drive":"google","google":"google"}[symptom]
+    if domain=="google":
+        st,r=http("https://www.google.com/appsstatus/json/en",timeout=15)
+        if st==200 and isinstance(r,list):
+            for svc in r:
+                nm=(svc.get("service_name") or "").lower()
+                if any(k in nm for k in ("gmail","drive","calendar")) and svc.get("status") not in ("AVAILABLE",None):
+                    return f"Google Workspace outage ({svc.get('service_name')}: {svc.get('status')})"
+        return None
+    st,r=http(checks[domain],timeout=15)
+    if st==200 and isinstance(r,dict):
+        ind=((r.get("status") or {}).get("indicator") or "none")
+        if ind in ("major","critical"):return f"{domain.title()} outage (statuspage: {ind})"
+    return None
+
+def oauth_canary():
+    """The refresh token is the one credential that dies SILENTLY (revocation,
+    Testing-mode 7-day expiry, 6-month inactivity). Prove it is alive every run,
+    so a dead token pages Bobby BEFORE the pipeline needs it - with a fix-it runbook."""
+    if not (GOOGLE_CLIENT_ID and GOOGLE_REFRESH_TOKEN):return
+    import urllib.parse
+    data=urllib.parse.urlencode({"client_id":GOOGLE_CLIENT_ID,"client_secret":GOOGLE_CLIENT_SECRET,
+        "refresh_token":GOOGLE_REFRESH_TOKEN,"grant_type":"refresh_token"}).encode()
+    req=urllib.request.Request("https://oauth2.googleapis.com/token",data=data)
+    try:
+        with urllib.request.urlopen(req,timeout=20) as r:
+            body=json.loads(r.read().decode())
+            if body.get("access_token"):
+                log("OK: Google OAuth refresh token is live (canary).");return
+    except urllib.error.HTTPError as e:
+        raw=e.read().decode()
+        if "invalid_grant" in raw:
+            escalate.append("GOOGLE OAUTH TOKEN DEAD (invalid_grant). The pipeline will fail at 7 AM. "
+                "Fix: re-consent Iris Gmail (one click) - see runbook 'google-oauth-revoked' in skill lhos-self-healing-ops. "
+                "Zilla will auto-attempt browser re-consent when the Mac is awake.")
+        else:
+            log(f"OAuth canary inconclusive (HTTP {e.code}): {raw[:120]}")
+    except Exception as e:
+        log(f"OAuth canary inconclusive (transient): {e}")
+
+def billing_canary():
+    """GitHub Actions free tier = 2,000 min/mo on private repos; the watchdog is the
+    main consumer. The billing API needs scopes we may not have, so ESTIMATE from run
+    history instead (no special scope): count runs in the last 24h, sample their
+    durations, project the month. Sundays only; warn above 80%."""
+    import datetime
+    if datetime.datetime.now().weekday()!=6:return  # Sundays only
+    tok=os.environ.get("GITHUB_TOKEN","").strip()  # auto-provided by Actions
+    repo=os.environ.get("GITHUB_REPOSITORY","")
+    if not tok or not repo:return
+    hdr={"Authorization":f"Bearer {tok}","Accept":"application/vnd.github+json"}
+    since=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    st,r=http(f"https://api.github.com/repos/{repo}/actions/runs?per_page=100&created=%3E{since}",headers=hdr,timeout=20)
+    runs=(r.get("workflow_runs") if isinstance(r,dict) else None) or []
+    if st!=200 or not runs:log(f"Billing canary skipped (runs API {st}).");return
+    total_ms=0;sampled=0
+    for run in runs[:5]:
+        st2,t=http(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/timing",headers=hdr,timeout=20)
+        if st2==200 and isinstance(t,dict):total_ms+=t.get("run_duration_ms",0);sampled+=1
+    if not sampled:log("Billing canary skipped (no timing samples).");return
+    avg_min=(total_ms/sampled)/60000
+    monthly=avg_min*len(runs)*30
+    log(f"OK: Actions burn ~{avg_min:.1f} min/run x {len(runs)} runs/day = ~{monthly:.0f} min/mo projected (free tier 2000).")
+    if monthly>1600:
+        escalate.append(f"GitHub Actions projected at ~{monthly:.0f} min/mo (>80% of free tier). Watchdog may stop before month end - trim schedule or add payment method.")
+
+oauth_canary()
+billing_canary()
+
 # ---------- 1. Is the production workflow still active? ----------
 st,wf=n8n(f"/workflows/{WF_ID}")
 if st!=200:
@@ -181,8 +264,17 @@ def ping(url,label):
     log(f"{label} ping FAILED after retries (last={st})");return False
 
 if escalate:
-    # Explicit failure signal = instant detection instead of waiting out the grace period.
-    if HEARTBEAT_FAIL_URL:ping(HEARTBEAT_FAIL_URL,"heartbeat /fail")
+    # Suppress the page when the symptom is a CONFIRMED provider outage:
+    # nothing to fix, retry+resume is automatic, paging Bobby is pure noise.
+    outage=None
+    for e in escalate:
+        sym="google" if "oauth" in e.lower() or "gmail" in e.lower() else ("n8n" if ("n8n" in e.lower() or "workflow" in e.lower()) else "backend")
+        outage=provider_outage(sym)
+        if outage:break
+    if outage:
+        log(f"OUTAGE SUPPRESSION: {outage}. Not paging; level-triggered loop will auto-resume when provider recovers.")
+    else:
+        if HEARTBEAT_FAIL_URL:ping(HEARTBEAT_FAIL_URL,"heartbeat /fail")
 else:
     if HEARTBEAT_URL:ping(HEARTBEAT_URL,"coarse liveness")
 
