@@ -46,17 +46,17 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 .icon-tile.sm{width:44px;height:44px;border-radius:14px}.icon-tile.sm svg{width:22px;height:22px}
 
 /* ---------- rail ---------- */
-.rail{position:fixed;left:32px;top:44px;bottom:48px;width:118px;z-index:50;display:flex;flex-direction:column;align-items:center;padding:24px 10px;border-radius:30px}
+.rail{position:fixed;left:32px;top:44px;bottom:48px;width:118px;z-index:50;display:flex;flex-direction:column;align-items:center;padding:24px 10px 62px;border-radius:30px}
 .rail-logo{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px}
 .rail-logo .mark{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 34% 30%,rgba(115,191,255,.32),rgba(13,25,43,.5) 70%);border:1px solid rgba(199,231,255,.28);box-shadow:0 0 22px rgba(99,207,255,.22),inset 0 1px 0 rgba(255,255,255,.2);color:#eaf6ff}
 .rail-logo .mark svg{width:27px;height:27px;filter:drop-shadow(0 0 7px rgba(99,207,255,.5))}
 .rail-logo span{font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--iris-text)}
-.rail-nav{display:flex;flex-direction:column;justify-content:space-evenly;flex:1;width:100%;margin:6px 0}
+.rail-nav{display:flex;flex-direction:column;justify-content:space-between;flex:none;width:100%;height:430px;margin:26px 0 0}
 .rail-item{display:flex;flex-direction:column;align-items:center;gap:7px;width:100%;min-height:44px;padding:11px 4px;border-radius:20px;color:var(--iris-text-muted);font-size:11.5px;letter-spacing:.04em;transition:transform 180ms ease,border-color 180ms ease,background-color 180ms ease,box-shadow 180ms ease,color 180ms ease;border:1px solid transparent}
 .rail-item svg{width:22px;height:22px}
 .rail-item:hover{color:var(--iris-text);transform:translateY(-1px)}
 .rail-item[aria-current="page"]{color:var(--iris-text);background:linear-gradient(150deg,rgba(115,191,255,.24),rgba(13,25,43,.5));border-color:rgba(159,216,255,.4);box-shadow:0 0 20px rgba(99,207,255,.18),inset 0 1px 0 rgba(255,255,255,.18)}
-.rail-live{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.12em;color:var(--iris-text-secondary);padding:9px 14px;border-radius:999px;border:1px solid var(--iris-border);background:var(--iris-surface-soft)}
+.rail-live{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.12em;color:var(--iris-text-secondary);padding:9px 14px;border-radius:999px;border:1px solid var(--iris-border);background:var(--iris-surface-soft);margin-top:auto}
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--light);box-shadow:0 0 10px var(--light)}
 .rail-live .live-dot{animation:breathe 2.6s ease-in-out infinite}
 @keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
@@ -65,20 +65,20 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 .topbar{display:none}
 
 /* ---------- layout ---------- */
-.shell{position:relative;margin-left:224px;padding:56px 48px 40px 0;max-width:1544px;min-height:100vh;display:flex;flex-direction:column}
+.shell{position:relative;margin-left:224px;padding:92px 48px 40px 0;max-width:1544px;min-height:100vh;display:flex;flex-direction:column}
 section.page{display:none;flex:1;flex-direction:column;gap:24px}
 section.page.on{display:flex}
 
 /* ---------- headers ---------- */
-.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;padding:6px 4px 2px}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:28px;padding:6px 4px 22px}
 .eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--iris-text-muted);margin-bottom:16px}
-h1{font-size:60px;font-weight:500;line-height:1.05;letter-spacing:-.02em;text-shadow:0 2px 26px rgba(0,0,0,.6)}
+h1{font-size:64px;font-weight:500;line-height:1.06;letter-spacing:-.02em;text-shadow:0 2px 26px rgba(0,0,0,.6)}
 h1 em{font-style:italic;font-weight:400}
 .head-sub{margin-top:16px;font-size:16.5px;color:var(--iris-text-secondary);max-width:560px}
 .pill-dot{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 10px var(--light)}
 
 /* ---------- cards ---------- */
-.bento{display:grid;gap:20px}
+.bento{display:grid;gap:20px;flex:1}
 .card{padding:26px 28px;display:flex;flex-direction:column;border-radius:var(--iris-radius-lg);transition:transform 180ms ease,border-color 180ms ease,box-shadow 180ms ease}
 .card:hover{transform:translateY(-2px);border-color:var(--iris-border-strong)}
 .card-head{display:flex;align-items:center;gap:16px;margin-bottom:18px}
@@ -91,13 +91,13 @@ h1 em{font-style:italic;font-weight:400}
 .state-chip i{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 9px var(--light);font-style:normal}
 
 /* overview grid */
-.ov-grid{grid-template-columns:minmax(300px,1.05fr) repeat(3,1fr)}
-.ov-health{grid-row:span 2;align-items:flex-start}
-.ov-health .card-value{font-size:52px}
+.ov-grid{grid-template-columns:minmax(300px,1.05fr) repeat(3,1fr);grid-template-rows:1.35fr .75fr}
+.ov-health{grid-row:span 2;align-items:center;text-align:center;justify-content:flex-start}
+.ov-health .card-head{align-self:flex-start;text-align:left;margin-bottom:6px}.ov-health .card-value{font-size:52px;margin-top:auto}.ov-health .card-sub{margin-bottom:26px}
 .ov-api{grid-column:2/5;flex-direction:row;align-items:center;gap:20px}
 .ov-api .card-head{margin-bottom:0;flex:1}
 .ov-api .api-state{margin-left:auto;text-align:right}
-.ring-wrap{position:relative;width:132px;height:132px;margin:14px 0 20px;display:grid;place-items:center}
+.ring-wrap{position:relative;width:148px;height:148px;margin:auto 0 22px;display:grid;place-items:center}
 .ring-wrap svg.ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
 .ring-wrap .ring-bg{fill:none;stroke:rgba(199,231,255,.14);stroke-width:5}
 .ring-wrap .ring-fg{fill:none;stroke:var(--light);stroke-width:5;stroke-linecap:round;stroke-dasharray:364.4;stroke-dashoffset:24;filter:drop-shadow(0 0 8px var(--light))}
@@ -107,7 +107,7 @@ h1 em{font-style:italic;font-weight:400}
 .ring-wrap .icon-tile svg{width:34px;height:34px}
 
 /* status definition strip */
-.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding:20px 26px;border-radius:var(--iris-radius-lg)}
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding:22px 26px;border-radius:var(--iris-radius-lg);margin-top:4px}
 .strip-item{display:flex;align-items:flex-start;gap:14px}
 .strip-item .icon-tile{width:42px;height:42px;border-radius:13px}.strip-item .icon-tile svg{width:20px;height:20px}
 .strip-item h3{font-size:14.5px;font-weight:550;display:flex;align-items:center;gap:8px}
@@ -262,7 +262,7 @@ h1 em{font-style:italic;font-weight:400}
  </header>
  <div class="bento ov-grid">
   <article class="liquid-glass liquid-glass--primary card ov-health">
-   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-pulse"/></svg></div><h2>Overall health</h2></div>
+   <div class="card-head"><h2>Overall health</h2></div>
    <div class="ring-wrap" id="ovRing">
     <svg class="ring" viewBox="0 0 132 132" aria-hidden="true"><circle class="ring-bg" cx="66" cy="66" r="58"/><circle class="ring-fg" id="ovRingFg" cx="66" cy="66" r="58"/></svg>
     <div class="icon-tile"><svg aria-hidden="true"><use href="#i-check-circle" id="ovRingIcon"/></svg></div>
