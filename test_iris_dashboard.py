@@ -22,7 +22,14 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('.liquid-glass::before',DASHBOARD_HTML)
   self.assertIn('.liquid-glass::after',DASHBOARD_HTML)
   self.assertIn('.liquid-glass--primary',DASHBOARD_HTML)
-  self.assertIn('--iris-blur:28px',DASHBOARD_HTML)
+  import re as _re
+  blur=_re.search(r'--iris-blur:(\d+)px',DASHBOARD_HTML)
+  self.assertTrue(blur and int(blur.group(1))>=28,'backdrop blur must stay >=28px')
+  # glass must stay genuinely translucent so the wallpaper reads through
+  fills=[float(a) for a in _re.findall(r'\.liquid-glass\{[^}]*?rgba\(\d+,\d+,\d+,\.(\d+)\)',DASHBOARD_HTML)]
+  alphas=_re.findall(r'rgba\(\d+,\s*\d+,\s*\d+,\.(\d{2})\)',DASHBOARD_HTML.split('.liquid-glass{')[1].split('}')[0])
+  self.assertTrue(all(int(a)<=45 for a in alphas),f'base glass fill too opaque: {alphas}')
+  self.assertIn('saturate(190%)',DASHBOARD_HTML)
   self.assertIn('@supports not ((backdrop-filter:blur(1px))',DASHBOARD_HTML)
   self.assertIn('.glass-pill',DASHBOARD_HTML)
   self.assertIn('.icon-tile{',DASHBOARD_HTML)
