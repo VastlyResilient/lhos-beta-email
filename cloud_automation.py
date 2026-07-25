@@ -25,6 +25,7 @@ GLM_API_KEY=os.getenv("GLM_API_KEY","")
 GLM_BASE_URL=os.getenv("GLM_BASE_URL","https://api.z.ai/api/paas/v4")
 DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";REPORTS_FILE=DATA_DIR/"daily_reports.json";HEARTBEAT_FILE=DATA_DIR/"automation_heartbeat.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
 KRISTINA="kristina@freedomforgeai.com"
+ALERT_EMAIL=os.getenv("LHOS_ALERT_EMAIL","bobbyatf@gmail.com")  # ALL operational/failure alerts go here; approvers get review emails only
 APPROVAL_WORDS=("approved","approve","looks good","send it","send the email","good to send","go ahead","confirmed","confirm","lgtm","ship it","ship this","release it","ready to send")
 REVISION_WORDS=("change","revise","revision","edit","replace","remove","add","fix","correct","update","rewrite","adjust")
 HOLD_PATTERNS=(r"\bdo not send\b",r"\bdon[’']?t send\b",r"\bnot approved\b",r"\bhold (?:off|this|the email)\b",r"\bwait\b",r"\bnot ready\b")
@@ -270,10 +271,10 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         f,raw,meta=drive_source(token,date_key);ok,reasons=validate_daily_content(raw)
         if not ok:
             action_subject=f"[ACTION REQUIRED] LifeHouse OS content needed - {date_display}"
-            if dry_run:return {"action":"would_hold_and_notify_kristina","valid":False,"reasons":reasons,"source":meta}
+            if dry_run:return {"action":"would_hold_and_notify_bobby","valid":False,"reasons":reasons,"source":meta}
             if not gmail_subject_sent_any(token,action_subject,date_key):
-                body='<p>Hi Kristina,</p><p>I cannot prepare today\'s LifeHouse OS beta update because the dated source is missing or incomplete.</p><ul>'+''.join(f'<li>{html.escape(x)}</li>' for x in reasons)+'</ul><p>Please update today\'s dated document and reply that it is ready, or reply with the complete content. If usable content is not provided, no beta email will be sent.</p><p>Warm regards,<br>Iris</p>'
-                send_email(token,KRISTINA,action_subject,body,sender_email,sender_name)
+                body='<p>Hi Bobby,</p><p>I cannot prepare today\'s LifeHouse OS beta update because the dated source is missing or incomplete.</p><ul>'+''.join(f'<li>{html.escape(x)}</li>' for x in reasons)+'</ul><p>Please have today\'s dated document updated (or reply with the complete content). If usable content is not provided, no beta email will be sent.</p><p>Warm regards,<br>Iris</p>'
+                send_email(token,ALERT_EMAIL,action_subject,body,sender_email,sender_name)
             st=state_all();st[date_key]={"date":date_key,"date_display":date_display,"stage":"hold","content_valid":False,"reasons":reasons,"source":meta,"action_subject":action_subject,"updated_at":now_et().isoformat()};save_state(st)
             return {"action":"hold","reasons":reasons}
         return prepare_from_raw(date_key,date_display,raw,meta,token,dry_run)
@@ -426,7 +427,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         subject=f"[NOT SENT] LifeHouse OS beta update - {date_display}"
         if dry_run:return {"action":"would_notify_not_sent","reason":reason,"stage":state.get("stage") if state else None}
         if not gmail_subject_sent_any(token,subject,date_key):
-            body=f"<p>Hi Kristina,</p><p>Today's LifeHouse OS beta email was <strong>not sent</strong> at 3:00 PM Eastern.</p><p>{html.escape(reason)}</p><p>No beta tester received an email.</p><p>Warm regards,<br>Iris</p>";send_email(token,KRISTINA,subject,body,sender_email,sender_name)
+            body=f"<p>Hi Bobby,</p><p>Today's LifeHouse OS beta email was <strong>not sent</strong> at 3:00 PM Eastern.</p><p>{html.escape(reason)}</p><p>No beta tester received an email.</p><p>Warm regards,<br>Iris</p>";send_email(token,ALERT_EMAIL,subject,body,sender_email,sender_name)
         st=state_all();base=state or {"date":date_key,"date_display":date_display,"content_valid":False};base.update({"stage":"not_sent","not_sent_reason":reason,"not_sent_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=base;save_state(st);return {"action":"not_sent","reason":reason}
     @router.post("/auto-send")
     async def auto_send(req:Request,dry_run:bool=False):
