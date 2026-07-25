@@ -499,7 +499,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def watchdog(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            date_key,date_display=current();now=now_et();state=state_all().get(date_key);hb=load(HEARTBEAT_FILE,{});reason=None
+            heartbeat("watchdog");date_key,date_display=current();now=now_et();state=state_all().get(date_key);hb=load(HEARTBEAT_FILE,{});reason=None
             if now.hour < 7:return {"action":"too_early","time":now.isoformat()}
             if 7 <= now.hour < 15:
                 if state and state.get("stage") in ("sent","sent_external"):return {"action":"healthy_or_expected_terminal_state","stage":state.get("stage")}

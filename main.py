@@ -19,6 +19,7 @@ import secrets
 import html
 import re
 import fcntl
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -31,7 +32,7 @@ from typing import Optional
 import httpx
 from delivery import atomic_json_write, deliver_once
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
@@ -46,6 +47,7 @@ SENDER_NAME = os.getenv("LHOS_SENDER_NAME", "LifeHouse OS")
 FEEDBACK_LINK = os.getenv("LHOS_FEEDBACK_LINK", "https://lifehouseos.app/feedback")
 UNSUBSCRIBE_BASE_URL = os.getenv("UNSUBSCRIBE_BASE_URL", "https://lhos-unsubscribe-production.up.railway.app")
 AUTOMATION_TOKEN = os.getenv("LHOS_AUTOMATION_TOKEN", "")
+IRIS_DASHBOARD_TOKEN = os.getenv("IRIS_DASHBOARD_TOKEN", "")
 APPROVAL_SECRET = os.getenv("LHOS_APPROVAL_SECRET", "")
 TEST_RECIPIENT = "bobbyatf@gmail.com"
 ET = ZoneInfo("America/New_York")
@@ -803,7 +805,7 @@ async def create_isolated_test_review(payload: TestReviewCreate, request: Reques
     return {**result, "test_mode": True, "test_recipient": TEST_RECIPIENT, "review_message_id": sent.get("id")}
 
 # n8n cloud orchestration router (authenticated by X-LHOS-Automation-Token)
-from cloud_automation import configure_router
+from cloud_automation import configure_router, HEARTBEAT_FILE, REPORTS_FILE, ALERTS_FILE, load as cloud_load
 _public_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "lhos-beta-email-production.up.railway.app")
 PUBLIC_URL = os.getenv("LHOS_PUBLIC_URL", _public_domain if _public_domain.startswith("http") else "https://" + _public_domain)
 app.include_router(configure_router(
@@ -826,6 +828,70 @@ async def get_send_log(request: Request):
     """Get the send log."""
     require_automation(request)
     return load_log()
+
+# Private, read-only IRIS health dashboard.
+from iris_dashboard import DASHBOARD_HTML, build_snapshot
+_DASHBOARD_CONNECTOR_CACHE={"monotonic":0.0,"value":None}
+
+def _dashboard_cookie_value():
+    if not IRIS_DASHBOARD_TOKEN:return ""
+    return hmac.new(IRIS_DASHBOARD_TOKEN.encode(),b"iris-health-read-only",hashlib.sha256).hexdigest()
+
+def _require_dashboard(request:Request):
+    if not IRIS_DASHBOARD_TOKEN:raise HTTPException(status_code=503,detail="Dashboard access is not configured")
+    cookie=request.cookies.get("iris_dashboard_auth","");header=request.headers.get("x-iris-dashboard-token","")
+    if hmac.compare_digest(cookie,_dashboard_cookie_value()):return
+    if header and hmac.compare_digest(header,IRIS_DASHBOARD_TOKEN):return
+    raise HTTPException(status_code=401,detail="Private dashboard")
+
+def _private_headers(response):
+    response.headers["Cache-Control"]="no-store, max-age=0"
+    response.headers["Pragma"]="no-cache"
+    response.headers["X-Robots-Tag"]="noindex, nofollow"
+    response.headers["Referrer-Policy"]="no-referrer"
+    response.headers["X-Frame-Options"]="DENY"
+    response.headers["X-Content-Type-Options"]="nosniff"
+    response.headers["Content-Security-Policy"]="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    return response
+
+def _google_dashboard_check():
+    now_mono=time.monotonic();cached=_DASHBOARD_CONNECTOR_CACHE.get("value")
+    if cached and now_mono-float(_DASHBOARD_CONNECTOR_CACHE.get("monotonic",0))<120:return cached
+    checked=datetime.now(ET).isoformat()
+    try:
+        token=get_google_access_token();headers={"Authorization":f"Bearer {token}"}
+        probes=[
+            ("Gmail","https://gmail.googleapis.com/gmail/v1/users/me/profile",None),
+            ("Drive","https://www.googleapis.com/drive/v3/about",{"fields":"user(displayName)"}),
+            ("Contacts","https://people.googleapis.com/v1/contactGroups",{"pageSize":1,"groupFields":"name"}),
+        ]
+        failed=[]
+        for name,url,params in probes:
+            r=httpx.get(url,headers=headers,params=params,timeout=12)
+            if r.status_code!=200:failed.append(f"{name} HTTP {r.status_code}")
+        value={"google":"red" if failed else "green","detail":("Live OAuth refresh succeeded; Gmail, Drive, and Contacts answered." if not failed else "Google refresh succeeded, but "+", ".join(failed)+"."),"checked_at":checked}
+    except Exception as exc:
+        value={"google":"red","detail":f"Live Google authorization check failed ({type(exc).__name__}).","checked_at":checked}
+    _DASHBOARD_CONNECTOR_CACHE.update({"monotonic":now_mono,"value":value});return value
+
+def _iris_health_snapshot():
+    now=datetime.now(ET);states=cloud_load(AUTOMATION_STATE_FILE,{});date_key=now.strftime("%Y-%m-%d")
+    return build_snapshot(now=now,state=states.get(date_key) or {},heartbeat=cloud_load(HEARTBEAT_FILE,{}),connectors=_google_dashboard_check(),reports=cloud_load(REPORTS_FILE,{}),alerts=cloud_load(ALERTS_FILE,{}))
+
+@app.get("/iris-health",response_class=HTMLResponse)
+async def iris_health_page(request:Request,token:str=""):
+    if token:
+        if not IRIS_DASHBOARD_TOKEN or not hmac.compare_digest(token,IRIS_DASHBOARD_TOKEN):raise HTTPException(status_code=401,detail="Private dashboard")
+        response=RedirectResponse(url="/iris-health",status_code=303)
+        response.set_cookie("iris_dashboard_auth",_dashboard_cookie_value(),max_age=2592000,httponly=True,secure=True,samesite="strict",path="/")
+        return _private_headers(response)
+    _require_dashboard(request)
+    return _private_headers(HTMLResponse(DASHBOARD_HTML))
+
+@app.get("/api/iris-health")
+async def iris_health_api(request:Request):
+    _require_dashboard(request)
+    return _private_headers(JSONResponse(_iris_health_snapshot()))
 
 @app.get("/health")
 async def health():

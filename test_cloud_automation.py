@@ -37,6 +37,11 @@ class CloudTests(unittest.TestCase):
   self.assertEqual(ca.classify_instruction('Thanks'),'ambiguous')
  def test_unauthorized(self):
   self.assertEqual(self.app().get('/api/lhos/automation/status').status_code,401)
+ def test_watchdog_records_cloud_heartbeat(self):
+  at=ca.datetime(2030,1,1,10,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');fresh=at.isoformat();ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'hold','content_valid':False}});ca.atomic_json_write(ca.HEARTBEAT_FILE,{'prepare':fresh})
+  with patch.object(ca,'now_et',return_value=at):
+   r=self.app().post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200);self.assertEqual(ca.load(ca.HEARTBEAT_FILE,{})['watchdog'],fresh)
  def test_watchdog_dry_run_never_sends(self):
   with patch.object(ca,'now_et',return_value=ca.datetime(2030,1,1,16,0,tzinfo=ca.ET)):
    r=self.app().post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})

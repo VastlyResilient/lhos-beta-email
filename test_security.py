@@ -5,9 +5,23 @@ from fastapi import HTTPException
 from datetime import datetime as RealDateTime
 class SecurityTests(unittest.TestCase):
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory();os.environ['DATA_DIR']=self.t.name;os.environ['LHOS_AUTOMATION_TOKEN']='auto';os.environ['LHOS_APPROVAL_SECRET']='approve-secret'
+  self.t=tempfile.TemporaryDirectory();os.environ['DATA_DIR']=self.t.name;os.environ['LHOS_AUTOMATION_TOKEN']='auto';os.environ['LHOS_APPROVAL_SECRET']='approve-secret';os.environ['IRIS_DASHBOARD_TOKEN']='dashboard-secret'
   import main;self.main=importlib.reload(main);self.c=TestClient(self.main.app)
  def tearDown(self):self.t.cleanup()
+ def test_dashboard_is_private_and_uses_read_only_cookie(self):
+  self.assertEqual(self.c.get('/iris-health').status_code,401)
+  self.assertEqual(self.c.get('/api/iris-health').status_code,401)
+  login=self.c.get('/iris-health?token=dashboard-secret',follow_redirects=False)
+  self.assertEqual(login.status_code,303);self.assertIn('iris_dashboard_auth',login.headers.get('set-cookie',''));self.assertNotIn('dashboard-secret',login.headers.get('set-cookie',''))
+  cookie=login.cookies.get('iris_dashboard_auth');self.c.cookies.set('iris_dashboard_auth',cookie)
+  page=self.c.get('/iris-health')
+  self.assertEqual(page.status_code,200);self.assertIn('IRIS',page.text);self.assertIn('Today',page.text)
+ def test_dashboard_api_is_safe_and_never_returns_credentials(self):
+  r=self.c.get('/api/iris-health',headers={'x-iris-dashboard-token':'dashboard-secret'})
+  self.assertEqual(r.status_code,200);body=r.json();self.assertIn(body['overall']['light'],('green','orange','red'));self.assertIn('systems',body);self.assertIn('edition',body)
+  raw=r.text;self.assertNotIn('dashboard-secret',raw);self.assertNotIn('approve-secret',raw)
+ def test_dashboard_rejects_wrong_token(self):
+  self.assertEqual(self.c.get('/iris-health?token=wrong').status_code,401)
  def test_draft_apis_require_auth(self):
   self.assertEqual(self.c.get('/api/lhos/drafts').status_code,401)
   self.assertEqual(self.c.get('/api/lhos/log').status_code,401)
