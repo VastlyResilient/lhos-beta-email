@@ -768,7 +768,7 @@ async def approve_and_send(draft_id: str, request: Request, token: str = ""):
         verify_approval(draft_id, token)
         drafts = load_drafts(); draft = drafts.get(draft_id)
         if not draft: raise HTTPException(status_code=404, detail="Draft not found")
-        if not draft.get("test_mode"): raise HTTPException(status_code=403, detail="Production approval requires an authenticated email or FFAI sender")
+        if not draft.get("test_mode"): raise HTTPException(status_code=403, detail="Production approval requires an authenticated email sender")
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     return record_draft_approval(draft_id, body.get("approver", "authorized test reviewer" if not automated else "automation"))
 

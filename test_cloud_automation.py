@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import cloud_automation as ca
 class CloudTests(unittest.TestCase):
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.HEARTBEAT_FILE=root/'heartbeat.json';ca.REPORTS_FILE=root/'reports.json';ca.SEND_POLICY='ON_APPROVAL';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE=''
+  self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.HEARTBEAT_FILE=root/'heartbeat.json';ca.REPORTS_FILE=root/'reports.json';ca.SEND_POLICY='ON_APPROVAL';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE='';ca.IMESSAGE_ENABLED=False;ca.ALERT_EMAIL='bobbyatf@gmail.com'
  def tearDown(self):self.t.cleanup()
  def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None):
   app=FastAPI(); drafts=dict(initial_drafts or {}); self._drafts=drafts
@@ -46,8 +46,24 @@ class CloudTests(unittest.TestCase):
   ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'July 23, 2026','stage':'review_sent','content_valid':True,'draft_id':'old','subject':'S','review_subject':'[REVIEW] S','raw_content':raw}})
   sent=[];app=self.app(send_email=lambda *a:sent.append(a),initial_drafts={'old':{'id':'old','status':'pending_approval','text_body':raw}})
   with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'revise_with_glm',return_value=raw.replace('clearer labels','clearer labels and revised colors')):
-   r=app.post('/api/lhos/automation/decision',headers={'x-lhos-automation-token':'secret'},json={'actor':'Kristina','text':'change the labels','message_id':'m-revise','channel':'imessage'})
+   r=app.post('/api/lhos/automation/decision',headers={'x-lhos-automation-token':'secret'},json={'actor':'Kristina','text':'change the labels','message_id':'m-revise','channel':'email'})
   self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'revised_review_sent');newid=r.json()['draft_id'];self.assertIn(newid,self._drafts);self.assertEqual(self._drafts['old']['status'],'revised');self.assertEqual(len(sent),1)
+ def test_imessage_decision_channel_is_disabled(self):
+  at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0)
+  with patch.object(ca,'now_et',return_value=at8):
+   r=self.app().post('/api/lhos/automation/decision',headers={'x-lhos-automation-token':'secret'},json={'actor':'Kristina','text':'approve','message_id':'m1','channel':'imessage'})
+  self.assertEqual(r.status_code,410);self.assertIn('disabled by policy',r.json()['detail'])
+ def test_missing_content_alert_goes_only_to_bobby(self):
+  at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);sent=[]
+  with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'drive_source',return_value=(None,'',{'name':None})),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+   r=self.app(send_email=lambda *a:sent.append(a)).post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'hold');self.assertEqual(len(sent),1);self.assertEqual(sent[0][1],'bobbyatf@gmail.com')
+ def test_not_sent_alert_goes_only_to_bobby(self):
+  at15=ca.now_et().replace(hour=15,minute=0,second=0,microsecond=0);date=at15.strftime('%Y-%m-%d');sent=[]
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'review_sent','content_valid':True,'draft_id':'id'}})
+  with patch.object(ca,'now_et',return_value=at15),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+   r=self.app(send_email=lambda *a:sent.append(a),initial_drafts={'id':{'status':'pending_approval'}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'not_sent');self.assertEqual(len(sent),1);self.assertEqual(sent[0][1],'bobbyatf@gmail.com')
  def test_manual_late_send_requires_exact_confirmation(self):
   at16=ca.now_et().replace(hour=16,minute=0,second=0,microsecond=0)
   with patch.object(ca,'now_et',return_value=at16):
@@ -132,7 +148,7 @@ class CloudTests(unittest.TestCase):
   ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'review_sent','content_valid':True,'draft_id':'id'}});sent=[]
   app=self.app(send_email=lambda *a:sent.append(a))
   with patch.object(ca,'now_et',return_value=at):r=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'})
-  self.assertEqual(r.json()['action'],'report_sent');self.assertTrue(r.json()['incident']);self.assertEqual(len(sent),1)
+  self.assertEqual(r.json()['action'],'report_sent');self.assertTrue(r.json()['incident']);self.assertEqual(len(sent),1);self.assertEqual(sent[0][1],'bobbyatf@gmail.com')
  def test_close_out_is_sent_once_per_day(self):
   at=ca.now_et().replace(hour=15,minute=30,second=0,microsecond=0);date=at.strftime('%Y-%m-%d')
   ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'sent','content_valid':True,'draft_id':'id'}});sent=[]

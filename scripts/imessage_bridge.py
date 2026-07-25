@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import httpx
 ET=ZoneInfo("America/New_York"); CHAT_ID=1079; CHAT_GUID="any;+;2232f1a0c45c4a14832adff0ec8120da"; CHAT_IDENTIFIER="2232f1a0c45c4a14832adff0ec8120da"; GROUP_ID="CD24A6BC-7F93-4D2D-A565-ADED19DD01FC"
 NAMES={'16770e54d6d075bf96c70208dfd7e781364e2cf3b832c85bfebaaed28d33f027': 'Thomas Appling', '67ba33e3c4f07c6cb101e1af49df6fa3162d118c8804176ec8f1c9ba2fd90ad0': 'Kristina'}; SIGN="-AUTOSENT BY ZILLA"; STATE=Path("/Users/bobby/.zilla/lhos-imessage/state.json"); LOG=Path("/Users/bobby/.zilla/logs/lhos-imessage-bridge.log")
-TOKEN=Path("/Users/bobby/lhos-beta-email/.automation_token"); API="https://lhos-beta-email-production.up.railway.app"; WORDS=("email","draft","review","content","upload","send","approve","revision","revise","change","iris","zilla")
+TOKEN=Path("/Users/bobby/lhos-beta-email/.automation_token"); API="https://lhos-beta-email-production.up.railway.app"; IMESSAGE_ENABLED=False  # Policy invariant: cannot be re-enabled by environment or scheduler configuration.; WORDS=("email","draft","review","content","upload","send","approve","revision","revise","change","iris","zilla")
 def log(x): LOG.parent.mkdir(parents=True,exist_ok=True);LOG.open("a").write(f"{dt.datetime.now(ET).isoformat()} {x}\n")
 def load():
  try:return json.loads(STATE.read_text())
@@ -35,10 +35,14 @@ def history(limit=200):
 def headers():return {'X-LHOS-Automation-Token':TOKEN.read_text().strip()}
 def status():
  r=httpx.get(API+'/api/lhos/automation/status',headers=headers(),timeout=30);r.raise_for_status();return r.json()
+def require_enabled():
+ if not IMESSAGE_ENABLED:raise RuntimeError("LHOS iMessage integration is disabled by policy")
 def decide(actor,text,guid,dry=False):
+ require_enabled()
  r=httpx.post(API+'/api/lhos/automation/decision',headers=headers(),params={'dry_run':str(dry).lower()},json={'actor':actor,'text':text,'message_id':guid,'channel':'imessage'},timeout=180);r.raise_for_status();return r.json()
 def signed(t):return t.strip() if t.strip().endswith(SIGN) else t.strip()+'\n\n'+SIGN
 def send_group(text,s,dry=False):
+ require_enabled()
  now=dt.datetime.now(ET)
  if not dry and not (7<=now.hour<15 or (now.hour==15 and now.minute<15)):raise RuntimeError('FFAI send blocked outside 07:00-15:15 Eastern')
  verify();text=signed(text);day=now.strftime('%Y-%m-%d');key=hashlib.sha256((day+CHAT_GUID+text).encode()).hexdigest();s.setdefault('send_attempts',{})
@@ -67,6 +71,7 @@ def direct(row,s):
  t=(row.get('text') or '')
  return bool(re.match(r'(?is)\A[ \t]*@?(?:zilla|iris)[ \t]*:[ \t]*(?:\S(?:.*\S)?)[ \t]*\Z',t))
 def run(dry=False,initialize=False,health=False):
+ if not IMESSAGE_ENABLED:return {"action":"disabled","channel":"imessage","reason":"LHOS iMessage integration is disabled by policy"}
  now=dt.datetime.now(ET)
  if not (initialize or health or 7<=now.hour<15 or (now.hour==15 and now.minute<15)):
   return {"action":"outside_active_window","time":now.isoformat(),"window":"07:00-15:15 America/New_York"}

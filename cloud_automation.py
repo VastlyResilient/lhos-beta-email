@@ -25,7 +25,8 @@ GLM_API_KEY=os.getenv("GLM_API_KEY","")
 GLM_BASE_URL=os.getenv("GLM_BASE_URL","https://api.z.ai/api/paas/v4")
 DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";REPORTS_FILE=DATA_DIR/"daily_reports.json";HEARTBEAT_FILE=DATA_DIR/"automation_heartbeat.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
 KRISTINA="kristina@freedomforgeai.com"
-ALERT_EMAIL=os.getenv("LHOS_ALERT_EMAIL","bobbyatf@gmail.com")  # ALL operational/failure alerts go here; approvers get review emails only
+ALERT_EMAIL="bobbyatf@gmail.com"  # Policy invariant: ALL operational/failure alerts go only to Bobby.
+IMESSAGE_ENABLED=False  # Policy invariant: LHOS iMessage intake/outbound is disabled in code.
 APPROVAL_WORDS=("approved","approve","looks good","send it","send the email","good to send","go ahead","confirmed","confirm","lgtm","ship it","ship this","release it","ready to send")
 REVISION_WORDS=("change","revise","revision","edit","replace","remove","add","fix","correct","update","rewrite","adjust")
 HOLD_PATTERNS=(r"\bdo not send\b",r"\bdon[’']?t send\b",r"\bnot approved\b",r"\bhold (?:off|this|the email)\b",r"\bwait\b",r"\bnot ready\b")
@@ -376,7 +377,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                     else:
                         result=apply_instruction(date_key,date_display,current_state,addr,body,token,"email")
                         if result.get("action")=="clarification_needed":
-                            clarification_subject=f"[CLARIFICATION] {current_state.get('review_subject')}";clarification_body='<p>Hi,</p><p>I could not determine whether your message was an approval or a revision request. Please reply with either <strong>approve/send</strong>, <strong>hold</strong>, or the exact change you want made.</p><p>Warm regards,<br>Iris</p>';send_email(token,addr,clarification_subject,clarification_body,sender_email,sender_name)
+                            clarification_subject=f"[IRIS REVIEW CLARIFICATION NEEDED] {current_state.get('review_subject')}";clarification_body=f"<p>Hi Bobby,</p><p>An authorized reviewer ({html.escape(addr)}) replied to today's review, but IRIS could not determine whether it was approval, hold, or a revision request.</p><p>No beta email will be sent until the instruction is clear.</p><p>Warm regards,<br>Iris</p>";send_email(token,ALERT_EMAIL,clarification_subject,clarification_body,sender_email,sender_name)
                 else:processed.add(rec["id"]);actions.append({"action":"no_op","stage":stage,"message_id":rec["id"]});continue
                 processed.add(rec["id"]);actions.append({**result,"message_id":rec["id"]})
             if not dry_run:atomic_json_write(PROCESSED_FILE,sorted(processed))
@@ -387,7 +388,8 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
         with automation_lock():
-            payload=await req.json();actor=str(payload.get("actor","")).strip();text=str(payload.get("text","")).strip();channel=str(payload.get("channel","imessage")).strip();message_id=str(payload.get("message_id","")).strip()
+            payload=await req.json();actor=str(payload.get("actor","")).strip();text=str(payload.get("text","")).strip();channel=str(payload.get("channel","disabled")).strip().lower();message_id=str(payload.get("message_id","")).strip()
+            if channel=="imessage" and not IMESSAGE_ENABLED:raise HTTPException(status_code=410,detail="LHOS iMessage integration is disabled by policy")
             if actor not in ("Kristina","Thomas Appling","Bobby"):raise HTTPException(status_code=403,detail="Actor is not an authorized approver")
             if not message_id or not text:raise HTTPException(status_code=400,detail="message_id and text are required")
             key=f"{channel}:{message_id}";processed=set(load(PROCESSED_FILE,[]))

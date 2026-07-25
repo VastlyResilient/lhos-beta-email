@@ -3,8 +3,13 @@ from unittest.mock import patch
 spec=importlib.util.spec_from_file_location("bridge","/Users/bobby/lhos-beta-email/scripts/imessage_bridge.py");b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 class BridgeTests(unittest.TestCase):
  def setUp(self):
-  self.old=b.NAMES.copy();b.NAMES={hashlib.sha256(b"k").hexdigest():"Kristina",hashlib.sha256(b"t").hexdigest():"Thomas Appling"}
- def tearDown(self):b.NAMES=self.old
+  self.old=b.NAMES.copy();self.old_enabled=b.IMESSAGE_ENABLED;b.IMESSAGE_ENABLED=True;b.NAMES={hashlib.sha256(b"k").hexdigest():"Kristina",hashlib.sha256(b"t").hexdigest():"Thomas Appling"}
+ def tearDown(self):b.NAMES=self.old;b.IMESSAGE_ENABLED=self.old_enabled
+ def test_imessage_disabled_by_default_policy(self):
+  b.IMESSAGE_ENABLED=False
+  self.assertEqual(b.run()['action'],'disabled')
+  with self.assertRaisesRegex(RuntimeError,'disabled by policy'):
+   b.send_group('notice',{'sent_hashes':[],'send_attempts':{},'outbound_guids':[]},True)
  def test_signature_exactly_once(self):
   self.assertEqual(b.signed("hello").count(b.SIGN),1);self.assertEqual(b.signed("hello\n\n"+b.SIGN).count(b.SIGN),1)
  def test_only_direct_workflow_language_routes(self):
