@@ -16,6 +16,7 @@ class SecurityTests(unittest.TestCase):
   cookie=login.cookies.get('iris_dashboard_auth');self.c.cookies.set('iris_dashboard_auth',cookie)
   page=self.c.get('/iris-health')
   self.assertEqual(page.status_code,200);self.assertIn('IRIS',page.text);self.assertIn('Today',page.text)
+  csp=page.headers.get('content-security-policy','');self.assertIn("default-src 'self'",csp);self.assertIn('d8j0ntlcm91z4.cloudfront.net',csp);self.assertIn('db.onlinewebfonts.com',csp)
  def test_dashboard_api_is_safe_and_never_returns_credentials(self):
   r=self.c.get('/api/iris-health',headers={'x-iris-dashboard-token':'dashboard-secret'})
   self.assertEqual(r.status_code,200);body=r.json();self.assertIn(body['overall']['light'],('green','orange','red'));self.assertIn('systems',body);self.assertIn('edition',body)

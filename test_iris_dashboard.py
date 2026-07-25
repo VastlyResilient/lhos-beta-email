@@ -9,6 +9,35 @@ ET=ZoneInfo("America/New_York")
 class IrisDashboardHealthTests(unittest.TestCase):
  def test_dashboard_includes_inline_favicon(self):
   self.assertIn('rel="icon"',DASHBOARD_HTML)
+ def test_cinematic_dashboard_uses_supplied_font_and_video(self):
+  self.assertIn('family=Flexo+Soft+Medium',DASHBOARD_HTML)
+  self.assertIn('hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4',DASHBOARD_HTML)
+  self.assertIn('createImageBitmap',DASHBOARD_HTML)
+  self.assertIn('Math.round(duration*24)',DASHBOARD_HTML)
+  self.assertIn('Math.min(120,Math.max(30',DASHBOARD_HTML)
+ def test_cinematic_dashboard_has_four_truthful_iris_sections(self):
+  for section in ('overview','systems','edition','awareness'):
+   self.assertIn(f'id="{section}"',DASHBOARD_HTML)
+   self.assertIn(f'href="#{section}"',DASHBOARD_HTML)
+  self.assertNotIn('NOVA_AI',DASHBOARD_HTML)
+  self.assertNotIn('Today AI',DASHBOARD_HTML)
+  self.assertIn('data-hero-line',DASHBOARD_HTML)
+  self.assertIn('id="systemsList"',DASHBOARD_HTML)
+  self.assertIn('id="editionTimeline"',DASHBOARD_HTML)
+  self.assertIn('id="awarenessList"',DASHBOARD_HTML)
+ def test_cinematic_dashboard_replays_reveals_and_scrubs_smoothly(self):
+  self.assertIn('IntersectionObserver',DASHBOARD_HTML)
+  self.assertIn('entry.isIntersecting',DASHBOARD_HTML)
+  self.assertIn('requestAnimationFrame',DASHBOARD_HTML)
+  self.assertIn("smoothed+=(target-smoothed)*.1",DASHBOARD_HTML)
+  self.assertIn('devicePixelRatio',DASHBOARD_HTML)
+  self.assertIn('prefers-reduced-motion',DASHBOARD_HTML)
+ def test_cinematic_dashboard_has_accessible_fallback_and_controls(self):
+  self.assertIn('id="fallbackVideo"',DASHBOARD_HTML)
+  self.assertIn('id="videoCanvas"',DASHBOARD_HTML)
+  self.assertIn('aria-label="Refresh live IRIS status"',DASHBOARD_HTML)
+  self.assertIn('aria-label="Copy current IRIS status"',DASHBOARD_HTML)
+  self.assertIn('aria-hidden="true"',DASHBOARD_HTML)
  def snap(self, *, now=None, state=None, heartbeat=None, connectors=None, reports=None, alerts=None):
   now=now or datetime(2026,7,25,14,0,tzinfo=ET)
   return build_snapshot(now=now,state=state or {},heartbeat=heartbeat or {},connectors=connectors or {"google":"green","detail":"OAuth refresh and Google APIs verified."},reports=reports or {},alerts=alerts or {})

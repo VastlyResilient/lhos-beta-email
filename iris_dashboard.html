@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0a0a0a">
+<title>IRIS — Live Health & Edition Status</title>
+<link href="https://db.onlinewebfonts.com/c/4556933d6966c60eda45bebad34d9c90?family=Flexo+Soft+Medium" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%230a0a0a'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%2368e0b1'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#0a0a0a;--white:#fff;--muted:rgba(255,255,255,.68);--faint:rgba(255,255,255,.42);--line:rgba(255,255,255,.22);--green:#68e0b1;--orange:#f0b861;--red:#ff767d;--light:var(--green);--page-x:clamp(20px,3.34vw,48px);--shadow:0 2px 18px rgba(0,0,0,.78)}
+*{box-sizing:border-box}html{scroll-behavior:smooth;background:var(--bg)}body{margin:0;background:var(--bg);color:#fff;font-family:'Flexo Soft Medium',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}::selection{background-color:rgba(255,255,255,.2)}button,a{font:inherit}button{color:inherit}.site{position:relative;z-index:1}.scroll-video{position:fixed;inset:0;z-index:0;background:#0a0a0a;overflow:hidden}.scroll-video video,.scroll-video canvas{position:absolute;inset:0;width:100%;height:100%}.scroll-video video{object-fit:cover;opacity:1;transition:opacity .65s ease}.scroll-video video.frames-ready{opacity:0}.scroll-video canvas{opacity:0;transition:opacity .65s ease}.scroll-video canvas.is-ready{opacity:1}.video-contrast{position:absolute;inset:0;background:rgba(0,0,0,.2)}.video-contrast:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 45%,rgba(0,0,0,.12)),linear-gradient(0deg,rgba(0,0,0,.28),transparent 34%,rgba(0,0,0,.12));pointer-events:none}
+.fixed-brand{position:fixed;left:var(--page-x);top:clamp(20px,2vw,28px);z-index:50;text-shadow:var(--shadow)}.wordmark{display:inline-block;color:#fff;text-decoration:none;font-size:clamp(18px,1.7vw,24px);font-weight:500;letter-spacing:-.03em}.version{margin-top:24px;font-size:clamp(10px,.85vw,12px);color:rgba(255,255,255,.6);letter-spacing:.04em}.corner-nav{position:fixed;right:var(--page-x);top:clamp(20px,2vw,28px);z-index:50;text-align:right;text-shadow:var(--shadow)}.corner-nav ul{display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin:0;padding:0;list-style:none}.nav-link{display:flex;min-height:24px;align-items:center;gap:4px;color:rgba(255,255,255,.8);text-decoration:none;font-size:clamp(12px,1vw,14px);transition:color .3s ease}.nav-link:hover,.nav-link:focus-visible{color:#fff}.nav-link svg{width:14px;height:14px;transition:transform .3s ease}.nav-link:hover svg,.nav-link:focus-visible svg{transform:translate(2px,-2px)}:focus-visible{outline:1px solid rgba(255,255,255,.9);outline-offset:4px}
+.screen{position:relative;display:flex;min-height:100vh;min-height:100svh;padding:clamp(128px,15vh,168px) var(--page-x) clamp(64px,8vh,84px);text-shadow:var(--shadow)}.screen.bottom{flex-direction:column;justify-content:flex-end}.screen.center{align-items:center}.spacer{height:80vh}.content-row{display:flex;width:100%;align-items:flex-end;justify-content:space-between;gap:clamp(32px,7vw,100px)}.section-heading{margin:0;max-width:760px;font-size:clamp(44px,6.2vw,92px);font-weight:500;line-height:1.02;letter-spacing:-.045em;text-transform:uppercase}.section-heading.compact{max-width:590px;font-size:clamp(42px,5.2vw,76px)}.line{display:block}.indent-1{padding-left:clamp(24px,4vw,64px)}.indent-2{padding-left:clamp(40px,7vw,112px)}.indent-3{padding-left:clamp(64px,10vw,160px)}.soft{font-weight:300;font-style:italic;text-transform:none}.slash{font-weight:400}.info-column{display:flex;width:100%;max-width:330px;flex-direction:column;align-items:flex-start}.chapter{display:flex;width:100%;align-items:center;justify-content:space-between;margin-bottom:28px}.chapter-mark{font-size:18px}.chapter-count{font-size:12px;color:rgba(255,255,255,.7)}.status-name{display:flex;align-items:center;gap:9px;margin-bottom:12px;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.status-dot{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 20px color-mix(in srgb,var(--light) 70%,transparent)}.summary{margin:0 0 28px;font-size:14px;line-height:1.65;color:rgba(255,255,255,.86)}.pill{display:flex;min-height:46px;width:100%;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.62);border-radius:999px;background:transparent;color:#fff;text-decoration:none;text-transform:uppercase;font-size:11px;letter-spacing:.15em;cursor:pointer;transition:background .3s ease,color .3s ease}.pill:hover,.pill:focus-visible{background:#fff;color:#000}.corner-action{position:absolute;bottom:clamp(20px,2vw,28px);left:var(--page-x);display:grid;width:44px;height:44px;place-items:center;border:0;background:transparent;color:rgba(255,255,255,.8);cursor:pointer}.corner-action:hover{color:#fff}.corner-action svg,.down svg{width:18px;height:18px}.down{position:absolute;bottom:clamp(20px,2vw,28px);left:50%;transform:translateX(-50%);color:rgba(255,255,255,.8);animation:bounce 1.4s infinite}.down-link{display:grid;width:44px;height:44px;place-items:center;color:inherit}@keyframes bounce{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,8px)}}
+[data-reveal]{opacity:0;transform:translateY(32px);transition:opacity .7s ease-out,transform .7s ease-out;transition-delay:var(--delay,0ms);will-change:transform,opacity}[data-reveal].is-visible{opacity:1;transform:translateY(0)}
+.section-stack{display:flex;width:100%;flex-direction:column;gap:clamp(36px,6vh,64px)}.middle-row{display:flex;align-items:center;justify-content:space-between;gap:48px}.section-side{display:flex;min-width:250px;align-items:center;justify-content:space-between;gap:clamp(32px,7vw,96px)}.section-description{max-width:350px;margin:0;color:rgba(255,255,255,.82);font-size:14px;line-height:1.65}.systems-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(0,0,0,.08)}.system-item{min-height:164px;padding:22px 24px;border-right:1px solid var(--line);backdrop-filter:blur(2px)}.system-item:last-child{border-right:0}.item-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:34px;color:rgba(255,255,255,.62);font-size:10px;letter-spacing:.1em;text-transform:uppercase}.item-title{margin:0 0 10px;font-size:15px;font-weight:500}.item-detail{margin:0;color:rgba(255,255,255,.7);font-size:12px;line-height:1.55}
+.edition-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.54fr);gap:clamp(36px,7vw,100px);width:100%;align-items:end}.edition-copy{max-width:520px}.edition-label{display:flex;align-items:center;gap:10px;margin:0 0 18px;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.edition-detail{margin:0;color:rgba(255,255,255,.84);font-size:14px;line-height:1.65}.edition-meta{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}.meta{padding:15px 0;border-bottom:1px solid var(--line)}.meta:nth-child(odd){padding-right:22px}.meta:nth-child(even){padding-left:22px;border-left:1px solid var(--line)}.meta-label{display:block;margin-bottom:6px;color:rgba(255,255,255,.5);font-size:9px;letter-spacing:.13em;text-transform:uppercase}.meta-value{font-size:12px}.edition-timeline{display:grid;grid-template-columns:repeat(4,1fr);position:relative;margin-top:34px}.edition-timeline:before{content:"";position:absolute;left:6%;right:6%;top:9px;height:1px;background:var(--line)}.timeline-step{position:relative}.timeline-mark{position:relative;z-index:1;width:19px;height:19px;margin-bottom:11px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(10,10,10,.75)}.timeline-step.done .timeline-mark{border-color:var(--green);background:var(--green)}.timeline-step.current .timeline-mark{border-color:var(--light);box-shadow:0 0 0 4px color-mix(in srgb,var(--light) 20%,transparent)}.timeline-name{font-size:11px;color:rgba(255,255,255,.68)}
+.awareness-layout{display:grid;grid-template-columns:minmax(280px,.62fr) minmax(0,1.38fr);gap:clamp(44px,8vw,120px);width:100%;align-items:end}.awareness-list{border-top:1px solid var(--line)}.awareness-item{display:grid;grid-template-columns:16px minmax(170px,.75fr) minmax(0,1.25fr);gap:18px;padding:19px 0;border-bottom:1px solid var(--line);align-items:start}.awareness-item .status-dot{margin-top:4px}.awareness-title{margin:0;font-size:13px;font-weight:500}.awareness-detail{margin:0;color:rgba(255,255,255,.7);font-size:12px;line-height:1.55}.policy-row{display:flex;flex-wrap:wrap;gap:10px 24px;margin-top:22px;color:rgba(255,255,255,.62);font-size:10px;letter-spacing:.06em;text-transform:uppercase}.page-foot{position:absolute;right:var(--page-x);bottom:clamp(20px,2vw,28px);color:rgba(255,255,255,.5);font-size:10px}.error-banner{position:fixed;left:50%;bottom:24px;z-index:80;max-width:min(560px,calc(100% - 40px));transform:translateX(-50%);border:1px solid rgba(255,118,125,.55);border-radius:999px;background:rgba(10,10,10,.92);padding:12px 22px;color:#ffd2d4;font-size:12px;box-shadow:0 12px 48px rgba(0,0,0,.45)}
+@media(max-width:800px){.screen{padding-top:142px}.content-row,.middle-row,.edition-layout,.awareness-layout{flex-direction:column;display:flex;align-items:flex-start}.info-column{max-width:340px}.systems-list{grid-template-columns:1fr 1fr}.system-item:nth-child(2){border-right:0}.system-item:nth-child(-n+2){border-bottom:1px solid var(--line)}.section-side{width:100%;max-width:340px}.edition-copy{max-width:560px}.awareness-list{width:100%}.page-foot{position:static;margin-top:30px}.screen.center{align-items:flex-end}.section-stack{justify-content:flex-end;min-height:calc(100svh - 210px)}}
+@media(max-width:639px){.fixed-brand{left:20px;top:20px}.corner-nav{right:20px;top:20px}.version{margin-top:20px}.screen{padding:128px 20px 68px}.spacer{height:56vh}.content-row{gap:40px}.section-heading{font-size:clamp(40px,12vw,52px)}.section-heading.compact{font-size:clamp(38px,11vw,48px)}.indent-1{padding-left:22px}.indent-2{padding-left:38px}.indent-3{padding-left:58px}.info-column{max-width:100%}.chapter{margin-bottom:20px}.systems-list{grid-template-columns:1fr}.system-item{min-height:136px;border-right:0;border-bottom:1px solid var(--line)!important;padding:20px}.system-item:last-child{border-bottom:0!important}.item-top{margin-bottom:24px}.section-stack{gap:34px}.section-side{max-width:100%}.edition-layout{gap:34px}.edition-meta{width:100%}.edition-timeline{margin-top:28px}.timeline-name{font-size:10px}.awareness-item{grid-template-columns:14px 1fr;padding:18px 0}.awareness-detail{grid-column:2}.policy-row{line-height:1.5}.corner-action{left:12px}.page-foot{font-size:9px}.video-contrast{background:rgba(0,0,0,.3)}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}[data-reveal]{opacity:1;transform:none;transition:none}.down{animation:none}.scroll-video video,.scroll-video canvas{transition:none}}
+</style>
+</head>
+<body>
+<div id="scrollVideo" class="scroll-video" aria-hidden="true">
+  <video id="fallbackVideo" muted playsinline preload="auto" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4"></video>
+  <canvas id="videoCanvas"></canvas>
+  <div class="video-contrast"></div>
+</div>
+<div class="site">
+  <header>
+    <div class="fixed-brand">
+      <div data-reveal style="--delay:0ms"><a class="wordmark" href="#overview">(IRIS_OS)</a></div>
+      <div class="version" data-reveal style="--delay:150ms">[ LIVE / ET ]</div>
+    </div>
+    <nav class="corner-nav" aria-label="Dashboard sections">
+      <ul>
+        <li data-reveal style="--delay:100ms"><a class="nav-link" href="#overview">overview <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
+        <li data-reveal style="--delay:220ms"><a class="nav-link" href="#systems">systems <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
+        <li data-reveal style="--delay:340ms"><a class="nav-link" href="#edition">edition <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
+        <li data-reveal style="--delay:460ms"><a class="nav-link" href="#awareness">ahead <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section id="overview" class="screen bottom">
+      <div class="content-row">
+        <h1 class="section-heading" aria-label="Live IRIS health status">
+          <span class="line indent-1" data-reveal style="--delay:100ms"><span data-hero-line="0">IRIS</span></span>
+          <span class="line" data-reveal style="--delay:220ms"><span data-hero-line="1">LIVE</span></span>
+          <span class="line indent-2 slash" data-reveal style="--delay:340ms"><span data-hero-line="2">// HEALTH</span></span>
+          <span class="line indent-3" data-reveal style="--delay:460ms"><span data-hero-line="3">STATUS</span></span>
+        </h1>
+        <div class="info-column">
+          <div class="chapter" data-reveal style="--delay:400ms"><span class="chapter-mark">( A )</span><span class="chapter-count">[ 001 /004 ]</span></div>
+          <div id="overviewStatus" class="status-name" data-reveal style="--delay:500ms"><span class="status-dot"></span><span>Reading live signals</span></div>
+          <p id="overviewDetail" class="summary" data-reveal style="--delay:580ms">Checking the protected pipeline without guessing.</p>
+          <button id="refreshStatus" class="pill" type="button" aria-label="Refresh live IRIS status" data-reveal style="--delay:680ms">Refresh status</button>
+        </div>
+      </div>
+      <button id="copyStatus" class="corner-action" type="button" aria-label="Copy current IRIS status" data-reveal style="--delay:760ms"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+      <div class="down" data-reveal style="--delay:760ms"><a class="down-link" href="#systems" aria-label="Scroll to core systems"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></a></div>
+    </section>
+    <div class="spacer" aria-hidden="true"></div>
+    <section id="systems" class="screen center">
+      <div class="section-stack">
+        <div class="middle-row">
+          <h2 class="section-heading compact"><span class="line" data-reveal style="--delay:100ms">Core</span><span class="line indent-1" data-reveal style="--delay:220ms">Systems</span></h2>
+          <div class="section-side" data-reveal style="--delay:340ms"><span class="chapter-mark">( B )</span><span class="chapter-count">[ 002 /004 ]</span></div>
+        </div>
+        <p class="section-description" data-reveal style="--delay:400ms">Each light is backed by a live signal. Orange means observe. Red is reserved for a verified fault or stale heartbeat.</p>
+        <div id="systemsList" class="systems-list" aria-live="polite"></div>
+      </div>
+      <div class="down" data-reveal style="--delay:700ms"><a class="down-link" href="#edition" aria-label="Scroll to today’s edition"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></a></div>
+    </section>
+    <div class="spacer" aria-hidden="true"></div>
+    <section id="edition" class="screen center">
+      <div class="section-stack">
+        <div class="middle-row">
+          <h2 class="section-heading compact"><span class="line" data-reveal style="--delay:100ms">Today’s</span><span class="line indent-1" data-reveal style="--delay:220ms">Edition</span></h2>
+          <div class="section-side" data-reveal style="--delay:340ms"><span class="chapter-mark">( C )</span><span class="chapter-count">[ 003 /004 ]</span></div>
+        </div>
+        <div class="edition-layout">
+          <div class="edition-copy" data-reveal style="--delay:420ms">
+            <div id="editionStatus" class="edition-label"><span class="status-dot"></span><span>Reading edition state</span></div>
+            <p id="editionDetail" class="edition-detail">Today’s content, review, approval, and delivery state are evaluated separately from system health.</p>
+            <div id="editionTimeline" class="edition-timeline"></div>
+          </div>
+          <div class="edition-meta" data-reveal style="--delay:520ms">
+            <div class="meta"><span class="meta-label">Source</span><span id="source" class="meta-value">—</span></div>
+            <div class="meta"><span class="meta-label">Polling window</span><span id="window" class="meta-value">—</span></div>
+            <div class="meta"><span class="meta-label">Approval</span><span id="sendPolicy" class="meta-value">—</span></div>
+            <div class="meta"><span class="meta-label">Alerts</span><span id="alerts" class="meta-value">—</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="down" data-reveal style="--delay:700ms"><a class="down-link" href="#awareness" aria-label="Scroll to advance awareness"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></a></div>
+    </section>
+    <div class="spacer" aria-hidden="true"></div>
+    <section id="awareness" class="screen center">
+      <div class="awareness-layout">
+        <div>
+          <h2 class="section-heading compact"><span class="line" data-reveal style="--delay:100ms">See <span class="soft">ahead</span></span><span class="line indent-1" data-reveal style="--delay:220ms">Clearly</span></h2>
+          <div class="section-side" data-reveal style="--delay:340ms"><span class="chapter-mark">( D )</span><span class="chapter-count">[ 004 /004 ]</span></div>
+          <p class="section-description" data-reveal style="--delay:420ms">No invented expiry dates. No manufactured urgency. IRIS asks for attention only when live evidence warrants it.</p>
+          <div id="policyRow" class="policy-row" data-reveal style="--delay:500ms"></div>
+        </div>
+        <div id="awarenessList" class="awareness-list" aria-live="polite"></div>
+      </div>
+      <button class="corner-action" type="button" aria-label="Copy current IRIS status" data-copy-status data-reveal style="--delay:700ms"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+      <div class="page-foot">Private · read-only · America/New_York · auto-refresh 30s</div>
+    </section>
+  </main>
+  <div id="error" class="error-banner" role="status" hidden></div>
+</div>
+<script>
+const VIDEO_URL='https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4';
+const COLORS={green:'#68e0b1',orange:'#f0b861',red:'#ff767d'},NAMES={green:'verified',orange:'observe',red:'attention'};let currentSnapshot=null;
+const byId=id=>document.getElementById(id),setText=(id,value)=>{const el=byId(id);if(el)el.textContent=value??'—'};
+function applyLight(el,light){if(el)el.style.setProperty('--light',COLORS[light]||COLORS.red)}
+function make(tag,className,text){const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el}
+function render(snapshot){currentSnapshot=snapshot;const overall=snapshot.overall,light=overall.light;document.documentElement.dataset.health=light;document.documentElement.style.setProperty('--light',COLORS[light]||COLORS.red);
+ const heroLines=light==='green'?['IRIS','IS','// HEALTHY','NOW']:light==='orange'?['IRIS','IS','// WATCHING','NOW']:['IRIS','NEEDS','// ATTENTION','NOW'];document.querySelectorAll('[data-hero-line]').forEach((el,i)=>el.textContent=heroLines[i]);
+ const overview=byId('overviewStatus');applyLight(overview,light);overview.querySelector('span:last-child').textContent=NAMES[light];setText('overviewDetail',overall.detail+' Checked '+new Date(snapshot.generated_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})+' ET.');
+ const systems=byId('systemsList');systems.replaceChildren();['api','google','scheduler','watchdog'].forEach((key,index)=>{const x=snapshot.systems[key],article=make('article','system-item');article.dataset.reveal='';article.style.setProperty('--delay',(100+index*110)+'ms');applyLight(article,x.light);const top=make('div','item-top');const state=make('span','');state.append(make('span','status-dot'),document.createTextNode(' '+NAMES[x.light]));top.append(state,make('span','',String(index+1).padStart(2,'0')));article.append(top,make('h3','item-title',x.label),make('p','item-detail',x.detail));systems.append(article);revealObserver.observe(article)});
+ const e=snapshot.edition,editionStatus=byId('editionStatus');applyLight(editionStatus,e.light);editionStatus.querySelector('span:last-child').textContent=e.label;setText('editionDetail',e.detail);setText('source',e.source);setText('window',e.window);setText('sendPolicy',snapshot.policy.send_policy);setText('alerts',snapshot.policy.alerts+' · iMessage '+snapshot.policy.imessage.toLowerCase());
+ const timeline=byId('editionTimeline');timeline.replaceChildren();e.steps.forEach(step=>{const item=make('div','timeline-step '+step.state);applyLight(item,e.light);item.append(make('div','timeline-mark'),make('div','timeline-name',step.label));timeline.append(item)});
+ const awareness=byId('awarenessList');awareness.replaceChildren();snapshot.awareness.forEach((x,index)=>{const item=make('article','awareness-item');item.dataset.reveal='';item.style.setProperty('--delay',(100+index*100)+'ms');applyLight(item,x.light);item.append(make('span','status-dot'),make('h3','awareness-title',x.label),make('p','awareness-detail',x.detail));awareness.append(item);revealObserver.observe(item)});
+ const policy=byId('policyRow');policy.replaceChildren();[['cutoff',snapshot.policy.cutoff],['send',snapshot.policy.send_policy],['alerts',snapshot.policy.alerts],['iMessage',snapshot.policy.imessage]].forEach(([k,v])=>policy.append(make('span','',k+' · '+v)));byId('error').hidden=true}
+async function loadStatus(){const button=byId('refreshStatus');button.disabled=true;button.textContent='Refreshing…';try{const response=await fetch('/api/iris-health',{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw new Error('Health API returned '+response.status);render(await response.json())}catch(error){const banner=byId('error');banner.hidden=false;banner.textContent='Live status could not be refreshed: '+error.message}finally{button.disabled=false;button.textContent='Refresh status'}}
+async function copyStatus(event){if(!currentSnapshot)return;const s=currentSnapshot,text=`IRIS — ${s.overall.label}. ${s.overall.detail} Today: ${s.edition.label}.`;try{await navigator.clipboard.writeText(text);const el=event.currentTarget,old=el.getAttribute('aria-label');el.setAttribute('aria-label','IRIS status copied');setTimeout(()=>el.setAttribute('aria-label',old),1600)}catch(_){}}
+byId('refreshStatus').addEventListener('click',loadStatus);byId('copyStatus').addEventListener('click',copyStatus);document.querySelectorAll('[data-copy-status]').forEach(el=>el.addEventListener('click',copyStatus));
+const revealObserver=new IntersectionObserver(entries=>entries.forEach(entry=>entry.target.classList.toggle('is-visible',entry.isIntersecting)),{threshold:.15});document.querySelectorAll('[data-reveal]').forEach(el=>revealObserver.observe(el));
+(function initScrollVideo(){const canvas=byId('videoCanvas'),fallback=byId('fallbackVideo'),ctx=canvas.getContext('2d',{alpha:false});let frames=[],objectUrl=null,frameVideo=null,cancelled=false,raf=0,lastIndex=-1,smoothed=0,fallbackDuration=0,fallbackSeeking=false;
+ function clamp(value,min,max){return Math.min(max,Math.max(min,value))}function once(target,event){return new Promise((resolve,reject)=>{const done=()=>{cleanup();resolve()},fail=()=>{cleanup();reject(new Error('video '+event+' failed'))},cleanup=()=>{target.removeEventListener(event,done);target.removeEventListener('error',fail)};target.addEventListener(event,done,{once:true});target.addEventListener('error',fail,{once:true})})}
+ function resizeCanvas(){const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),h=Math.max(1,Math.round(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;lastIndex=-1}}
+ function drawCover(frame){const cw=canvas.width,ch=canvas.height,scale=Math.max(cw/frame.width,ch/frame.height),dw=frame.width*scale,dh=frame.height*scale;ctx.drawImage(frame,(cw-dw)/2,(ch-dh)/2,dw,dh)}
+ function seek(video,time){if(Math.abs(video.currentTime-time)<.001)return Promise.resolve();video.currentTime=time;return once(video,'seeked')}
+ async function extractFrames(){try{const response=await fetch(VIDEO_URL,{mode:'cors'});if(!response.ok)throw new Error('video fetch '+response.status);const blob=await response.blob();if(cancelled)return;objectUrl=URL.createObjectURL(blob);frameVideo=document.createElement('video');frameVideo.muted=true;frameVideo.playsInline=true;frameVideo.preload='auto';frameVideo.src=objectUrl;await once(frameVideo,'loadedmetadata');if(frameVideo.readyState<2)await once(frameVideo,'loadeddata');const duration=frameVideo.duration,count=Math.min(120,Math.max(30,Math.round(duration*24))),scale=Math.min(1,1280/frameVideo.videoWidth),width=Math.max(1,Math.round(frameVideo.videoWidth*scale)),height=Math.max(1,Math.round(frameVideo.videoHeight*scale)),end=Math.max(0,duration-.05);for(let i=0;i<count&&!cancelled;i++){await seek(frameVideo,(i/(count-1))*end);if(cancelled)break;frames.push(await createImageBitmap(frameVideo,{resizeWidth:width,resizeHeight:height,resizeQuality:'high'}))}if(cancelled)return;resizeCanvas();canvas.classList.add('is-ready');fallback.classList.add('frames-ready')}catch(error){console.info('IRIS frame extraction unavailable; using scrubbed video fallback.',error.message)}}
+ fallback.addEventListener('loadedmetadata',()=>{fallbackDuration=fallback.duration||0});fallback.addEventListener('seeked',()=>{fallbackSeeking=false});window.addEventListener('resize',resizeCanvas,{passive:true});window.addEventListener('scroll',()=>{}, {passive:true});resizeCanvas();extractFrames();
+ function tick(){const maxScroll=Math.max(1,document.documentElement.scrollHeight-window.innerHeight),target=clamp(window.scrollY/maxScroll,0,1);smoothed+=(target-smoothed)*.1;if(frames.length){const index=Math.min(frames.length-1,Math.round(smoothed*(frames.length-1)));if(index!==lastIndex){resizeCanvas();drawCover(frames[index]);lastIndex=index}}else if(fallbackDuration&&!fallbackSeeking){const targetTime=smoothed*Math.max(0,fallbackDuration-.05);if(Math.abs(fallback.currentTime-targetTime)>.001){fallbackSeeking=true;fallback.currentTime=targetTime}}raf=requestAnimationFrame(tick)}raf=requestAnimationFrame(tick);
+ window.addEventListener('pagehide',()=>{cancelled=true;cancelAnimationFrame(raf);frames.forEach(frame=>frame.close());frames=[];if(frameVideo){frameVideo.removeAttribute('src');frameVideo.load()}if(objectUrl)URL.revokeObjectURL(objectUrl)},{once:true})})();
+loadStatus();setInterval(loadStatus,30000);
+</script>
+</body>
+</html>
