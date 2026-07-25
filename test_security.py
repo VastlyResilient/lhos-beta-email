@@ -16,7 +16,7 @@ class SecurityTests(unittest.TestCase):
   cookie=login.cookies.get('iris_dashboard_auth');self.c.cookies.set('iris_dashboard_auth',cookie)
   page=self.c.get('/iris-health')
   self.assertEqual(page.status_code,200);self.assertIn('IRIS',page.text);self.assertIn('Today',page.text)
-  csp=page.headers.get('content-security-policy','');self.assertIn("default-src 'self'",csp);self.assertNotIn('cloudfront.net',csp);self.assertNotIn('onlinewebfonts.com',csp)
+  csp=page.headers.get('content-security-policy','');self.assertIn("default-src 'self'",csp);self.assertIn('d8j0ntlcm91z4.cloudfront.net',csp);self.assertNotIn('onlinewebfonts.com',csp)
   for path in ('/assets/wallpaper-overview.webp','/assets/icons/iris-eye.svg'):
    asset=self.c.get(path);self.assertEqual(asset.status_code,200,path);self.assertIn('noindex',asset.headers.get('x-robots-tag',''))
   traversal=self.c.get('/assets/..%2F..%2Fmain.py');self.assertIn(traversal.status_code,(400,404,422))

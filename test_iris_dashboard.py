@@ -36,10 +36,12 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('Today’s edition',DASHBOARD_HTML)
   self.assertIn('See <em>ahead</em> clearly',DASHBOARD_HTML)
  def test_v2_no_external_assets_or_placeholders(self):
-  for pattern in ('src="http','href="http','url(http','@import','fetch(\'http'):
-   self.assertNotIn(pattern,DASHBOARD_HTML)
+  import re as _re
+  hosts=set(_re.findall(r'https?://([^/"\'\s)]+)',DASHBOARD_HTML))
+  allowed={'d8j0ntlcm91z4.cloudfront.net','www.w3.org'}
+  self.assertEqual(hosts-allowed,set(),f'unexpected external hosts: {hosts-allowed}')
+  self.assertIn('hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4',DASHBOARD_HTML)
   self.assertNotIn('https://db.onlinewebfonts.com',DASHBOARD_HTML)
-  self.assertNotIn('cloudfront.net',DASHBOARD_HTML)
   self.assertNotIn('NOVA_AI',DASHBOARD_HTML)
   self.assertNotIn('Today AI',DASHBOARD_HTML)
   self.assertNotIn('Flexo',DASHBOARD_HTML)
@@ -53,9 +55,20 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn("' of 4 verified'",DASHBOARD_HTML)
   self.assertIn('Manual repair needed',DASHBOARD_HTML)
   self.assertIn('Evidence-based',DASHBOARD_HTML)
-  self.assertIn('hashchange',DASHBOARD_HTML)
+  self.assertIn('IntersectionObserver',DASHBOARD_HTML)
   self.assertIn('prefers-reduced-motion',DASHBOARD_HTML)
-  self.assertNotIn('IntersectionObserver',DASHBOARD_HTML)
+ def test_v2_scroll_experience(self):
+  self.assertIn('class="scroll-video"',DASHBOARD_HTML)
+  self.assertIn('id="fallbackVideo"',DASHBOARD_HTML)
+  self.assertIn('id="videoCanvas"',DASHBOARD_HTML)
+  self.assertIn('createImageBitmap',DASHBOARD_HTML)
+  self.assertIn('requestAnimationFrame',DASHBOARD_HTML)
+  self.assertIn('smoothed',DASHBOARD_HTML)
+  self.assertIn('class="spacer"',DASHBOARD_HTML)
+  self.assertGreaterEqual(DASHBOARD_HTML.count('class="spacer"'),3)
+  self.assertIn('min-height:100vh',DASHBOARD_HTML)
+  self.assertIn('scroll spy',DASHBOARD_HTML)
+  self.assertIn('aria-current',DASHBOARD_HTML)
  def snap(self, *, now=None, state=None, heartbeat=None, connectors=None, reports=None, alerts=None):
   now=now or datetime(2026,7,25,14,0,tzinfo=ET)
   return build_snapshot(now=now,state=state or {},heartbeat=heartbeat or {},connectors=connectors or {"google":"green","detail":"OAuth refresh and Google APIs verified."},reports=reports or {},alerts=alerts or {})

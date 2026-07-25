@@ -24,15 +24,21 @@ body{background:var(--iris-bg);color:var(--iris-text);font-family:Inter,ui-sans-
 a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 :focus-visible{outline:2px solid var(--iris-cyan);outline-offset:3px;border-radius:8px}
 
-/* ---------- wallpaper ---------- */
-.wallpaper{position:fixed;inset:0;z-index:-3;background:var(--iris-bg)}
-.wallpaper div{position:absolute;inset:0;background-position:center;background-repeat:no-repeat;background-size:cover;opacity:0;transition:opacity .5s ease}
+/* ---------- scroll-scrubbed video wallpaper ---------- */
+.wallpaper{position:fixed;inset:0;z-index:-4;background:var(--iris-bg)}
+.wallpaper div{position:absolute;inset:0;background-position:center;background-repeat:no-repeat;background-size:cover;opacity:0;transition:opacity .6s ease}
 .wallpaper div.on{opacity:1}
 .wp-overview{background-image:url('/assets/wallpaper-overview.webp')}
 .wp-systems{background-image:url('/assets/wallpaper-systems.webp')}
 .wp-edition{background-image:url('/assets/wallpaper-edition.webp')}
 .wp-ahead{background-image:url('/assets/wallpaper-ahead.webp')}
-.scrim{position:fixed;inset:0;z-index:-2;pointer-events:none;background:linear-gradient(180deg,rgba(2,7,17,.34),rgba(2,7,17,.16) 34%,rgba(2,7,17,.2) 70%,rgba(2,7,17,.42));}
+.scroll-video{position:fixed;inset:0;z-index:-3;background:transparent;overflow:hidden;pointer-events:none}
+.scroll-video video,.scroll-video canvas{position:absolute;inset:0;width:100%;height:100%}
+.scroll-video video{object-fit:cover;opacity:1;transition:opacity .6s ease}
+.scroll-video video.frames-ready{opacity:0}
+.scroll-video canvas{opacity:0;transition:opacity .6s ease}
+.scroll-video canvas.is-ready{opacity:1}
+.scrim{position:fixed;inset:0;z-index:-2;pointer-events:none;background:linear-gradient(180deg,rgba(2,7,17,.3),rgba(2,7,17,.14) 34%,rgba(2,7,17,.18) 68%,rgba(2,7,17,.36))}
 
 /* ---------- liquid glass primitives ---------- */
 .liquid-glass{position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(145deg,rgba(32,57,88,.34),rgba(6,13,26,.62) 55%,rgba(8,18,34,.72));border:1px solid var(--iris-border);border-radius:var(--iris-radius-lg);box-shadow:var(--iris-card-shadow);-webkit-backdrop-filter:blur(var(--iris-blur)) saturate(145%) brightness(76%);backdrop-filter:blur(var(--iris-blur)) saturate(145%) brightness(76%)}
@@ -65,9 +71,11 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 .topbar{display:none}
 
 /* ---------- layout ---------- */
-.shell{position:relative;margin-left:224px;padding:92px 48px 64px 0;max-width:1544px;min-height:100vh;display:flex;flex-direction:column}
-main#app{display:flex;flex-direction:column;flex:1}
-section.page{display:none;flex:1;flex-direction:column;gap:24px}
+.shell{position:relative;margin-left:224px;padding:0 48px 0 0;max-width:1544px}
+main#app{display:block}
+section.page{display:flex;flex-direction:column;gap:24px;min-height:100vh;min-height:100svh;padding-top:92px;padding-bottom:64px;scroll-margin-top:0}
+section.page .bento{flex:1}
+.spacer{height:46vh;pointer-events:none}
 section.page.on{display:flex}
 
 /* ---------- headers ---------- */
@@ -208,6 +216,7 @@ h1 em{font-style:italic;font-weight:400}
  .tl-num{width:46px;height:46px;font-size:16px}
  .tl-step:not(:last-child)::before{left:22px}
 }
+@media(max-width:760px){.spacer{height:28vh}}
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{animation:none!important;transition:none!important}
 }
@@ -215,6 +224,10 @@ h1 em{font-style:italic;font-weight:400}
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><symbol id="i-iris-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 12C5.9 7.2 9.4 5 12 5s6.1 2.2 9.2 7c-3.1 4.8-6.6 7-9.2 7s-6.1-2.2-9.2-7Z"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></symbol><symbol id="i-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4.4L10 6.8l3.8 10.4L16.2 12H21"/></symbol><symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6 20.8 8 12 12.4 3.2 8 12 3.6Z"/><path d="m4.6 12 7.4 3.7L19.4 12"/><path d="m4.6 15.6 7.4 3.7 7.4-3.7"/></symbol><symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.8h7.2l4.6 4.6v11.8H6.5V3.8Z"/><path d="M13.7 3.8v4.6h4.6"/><path d="M9.4 12.2h5.8M9.4 15.4h4.2"/></symbol><symbol id="i-arrow-ahead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M5.5 15.5c4.8 0 9-2.1 11-6"/><path d="m13.2 8.6 3.6-.8.8 3.6"/></symbol><symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="m8.2 12.4 2.7 2.7 5-5.4"/></symbol><symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.4" rx="7.6" ry="2.9"/><path d="M4.4 6.4v11.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V6.4"/><path d="M4.4 12c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9"/></symbol><symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.5-2.5a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"/><path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.5 2.5a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"/></symbol><symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.4V12l3.2 2"/></symbol><symbol id="i-shield-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 19 6v5.3c0 4.3-2.9 7.4-7 8.9-4.1-1.5-7-4.6-7-8.9V6l7-2.6Z"/><path d="M9.2 13.6a1.9 1.9 0 0 1 .5-3.7 2.5 2.5 0 0 1 4.8.6 1.7 1.7 0 0 1-.4 3.1H9.2Z"/></symbol><symbol id="i-doc-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4.8h6.4l4.1 4.1v6.3"/><path d="M11.9 4.8v4.1H16"/><path d="M5.5 4.8v14.4h7.2"/><path d="m17.6 14.8.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></symbol><symbol id="i-clock-poll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.8 12a7.8 7.8 0 1 1-2.3-5.5"/><path d="M19.9 3.6v3.4h-3.4"/><path d="M12 8.4V12l2.7 1.7"/></symbol><symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 3.6 10.6 13.8"/><path d="M20.8 3.6 14.3 20.4l-3.7-6.6L4 10.1 20.8 3.6Z"/></symbol><symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.2a5.3 5.3 0 0 1 5.3 5.3c0 3.8 1.4 5.2 1.4 5.2H5.3s1.4-1.4 1.4-5.2A5.3 5.3 0 0 1 12 4.2Z"/><path d="M10.2 18.2a1.9 1.9 0 0 0 3.6 0"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.2A8.4 8.4 0 0 0 5.7 6.5"/><path d="M20 3.6v4.6h-4.6"/><path d="M4 15.8a8.4 8.4 0 0 0 14.3 1.7"/><path d="M4 20.4v-4.6h4.6"/></symbol><symbol id="i-clock-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.6" cy="10.6" r="6.8"/><path d="M10.6 7.2v3.4l2.3 1.4"/><path d="m15.4 15.4 4.4 4.4M18.4 18.4l1.4-1.4M16.6 16.6l1.2-1.2"/></symbol><symbol id="i-shield-heal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 19 6v5.3c0 4.3-2.9 7.4-7 8.9-4.1-1.5-7-4.6-7-8.9V6l7-2.6Z"/><path d="M14.9 10.4a3.3 3.3 0 1 0 .4 3.2"/><path d="M15.4 8.6v2h-2"/></symbol><symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v4.6"/><circle cx="12" cy="8" r="0.7" fill="currentColor" stroke="none"/></symbol></svg>
+<div class="scroll-video" aria-hidden="true">
+ <video id="fallbackVideo" muted playsinline preload="auto" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4"></video>
+ <canvas id="videoCanvas"></canvas>
+</div>
 <div class="wallpaper" aria-hidden="true">
  <div class="wp-overview on" data-wp="overview"></div>
  <div class="wp-systems" data-wp="systems"></div>
@@ -301,6 +314,7 @@ h1 em{font-style:italic;font-weight:400}
  </footer>
 </section>
 
+<div class="spacer" aria-hidden="true"></div>
 <!-- ================= SYSTEMS ================= -->
 <section class="page" id="page-systems" data-section="systems" aria-labelledby="sysTitle">
  <header class="page-head">
@@ -338,6 +352,7 @@ h1 em{font-style:italic;font-weight:400}
  <footer class="liquid-glass mini-strip"><span class="pill-dot" id="sysStripDot"></span><span id="sysStripText">Self-healing coverage active &nbsp;•&nbsp; Manual repair needed: <b>No</b></span></footer>
 </section>
 
+<div class="spacer" aria-hidden="true"></div>
 <!-- ================= EDITION ================= -->
 <section class="page" id="page-edition" data-section="edition" aria-labelledby="edTitle">
  <header class="page-head">
@@ -366,6 +381,7 @@ h1 em{font-style:italic;font-weight:400}
  <footer class="liquid-glass mini-strip"><span class="pill-dot" id="edStripDot"></span><span id="edStripText">Self-healing is watching &nbsp;•&nbsp; Manual repair needed: <b>No</b></span></footer>
 </section>
 
+<div class="spacer" aria-hidden="true"></div>
 <!-- ================= AHEAD ================= -->
 <section class="page" id="page-ahead" data-section="ahead" aria-labelledby="ahTitle">
  <header class="page-head">
@@ -427,18 +443,18 @@ const setLight=(el,l)=>{if(el)el.style.setProperty('--light',LIGHTS[l]||LIGHTS.r
 const txt=(id,v)=>{const el=$(id);if(el)el.textContent=v??'—'};
 function timeET(iso){return new Date(iso).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})+' ET'}
 
-/* ---------- hash router ---------- */
-function route(){
- let h=(location.hash||'#overview').replace('#','');
- if(!SECTIONS.includes(h))h='overview';
- document.querySelectorAll('section.page').forEach(s=>s.classList.toggle('on',s.dataset.section===h));
+/* ---------- scroll spy ---------- */
+const SECTION_TITLES={overview:'Overview',systems:'Core Systems',edition:'Today’s Edition',ahead:'Advance Awareness'};
+function setActive(h){
  document.querySelectorAll('.wallpaper div').forEach(w=>w.classList.toggle('on',w.dataset.wp===h));
  document.querySelectorAll('[data-nav]').forEach(a=>{const on=a.dataset.nav===h;if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
- window.scrollTo({top:0,behavior:'instant'});
- const titles={overview:'Overview',systems:'Core Systems',edition:'Today’s Edition',ahead:'Advance Awareness'};
- document.title=`IRIS Health · ${titles[h]}`;
+ document.title=`IRIS Health · ${SECTION_TITLES[h]}`;
+ if(('#'+h)!==location.hash)history.replaceState(null,'','#'+h);
 }
-window.addEventListener('hashchange',route);
+const spy=new IntersectionObserver(entries=>{
+ entries.forEach(e=>{if(e.isIntersecting)setActive(e.target.dataset.section)});
+},{threshold:.35});
+document.querySelectorAll('section.page').forEach(sec=>spy.observe(sec));
 
 /* ---------- render ---------- */
 function render(d){
@@ -516,7 +532,32 @@ async function load(){
   render(await r.json());
  }catch(err){const b=$('error');b.hidden=false;b.textContent='Live status could not be refreshed: '+err.message}
 }
-route();load();setInterval(load,30000);
+/* ---------- scroll-scrubbed video ---------- */
+(function initScrollVideo(){
+ const VIDEO_URL='https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4';
+ const canvas=$('videoCanvas'),fallback=$('fallbackVideo');if(!canvas||!fallback)return;
+ const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const ctx=canvas.getContext('2d',{alpha:false});
+ let frames=[],objectUrl=null,frameVideo=null,cancelled=false,lastIndex=-1,smoothed=0,fallbackDuration=0,fallbackSeeking=false;
+ const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+ function once(target,event){return new Promise((res,rej)=>{const done=()=>{clean();res()},fail=()=>{clean();rej(new Error(event+' failed'))},clean=()=>{target.removeEventListener(event,done);target.removeEventListener('error',fail)};target.addEventListener(event,done,{once:true});target.addEventListener('error',fail,{once:true})})}
+ function resize(){const dpr=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),h=Math.max(1,Math.round(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;lastIndex=-1}}
+ function draw(f){const cw=canvas.width,ch=canvas.height,sc=Math.max(cw/f.width,ch/f.height),dw=f.width*sc,dh=f.height*sc;ctx.drawImage(f,(cw-dw)/2,(ch-dh)/2,dw,dh)}
+ function seek(v,t){if(Math.abs(v.currentTime-t)<.001)return Promise.resolve();v.currentTime=t;return once(v,'seeked')}
+ async function extract(){try{const r=await fetch(VIDEO_URL,{mode:'cors'});if(!r.ok)throw new Error('video fetch '+r.status);const blob=await r.blob();if(cancelled)return;objectUrl=URL.createObjectURL(blob);frameVideo=document.createElement('video');frameVideo.muted=true;frameVideo.playsInline=true;frameVideo.preload='auto';frameVideo.src=objectUrl;await once(frameVideo,'loadedmetadata');if(frameVideo.readyState<2)await once(frameVideo,'loadeddata');const dur=frameVideo.duration,count=Math.min(120,Math.max(30,Math.round(dur*24))),scale=Math.min(1,1280/frameVideo.videoWidth),wid=Math.max(1,Math.round(frameVideo.videoWidth*scale)),hei=Math.max(1,Math.round(frameVideo.videoHeight*scale)),end=Math.max(0,dur-.05);for(let i=0;i<count&&!cancelled;i++){await seek(frameVideo,(i/(count-1))*end);if(cancelled)break;frames.push(await createImageBitmap(frameVideo,{resizeWidth:wid,resizeHeight:hei,resizeQuality:'high'}))}if(cancelled)return;resize();canvas.classList.add('is-ready');fallback.classList.add('frames-ready')}catch(e){/* fallback video scrub remains */}}
+ fallback.addEventListener('loadedmetadata',()=>{fallbackDuration=fallback.duration||0});
+ fallback.addEventListener('seeked',()=>{fallbackSeeking=false});
+ addEventListener('resize',resize,{passive:true});
+ resize();if(!reduced)extract();
+ function tick(){const max=Math.max(1,document.documentElement.scrollHeight-innerHeight),target=reduced?0:clamp(scrollY/max,0,1);smoothed+=(target-smoothed)*.1;
+  if(frames.length){const i=Math.min(frames.length-1,Math.round(smoothed*(frames.length-1)));if(i!==lastIndex){resize();draw(frames[i]);lastIndex=i}}
+  else if(fallbackDuration&&!fallbackSeeking&&!reduced){const t=smoothed*Math.max(0,fallbackDuration-.05);if(Math.abs(fallback.currentTime-t)>.001){fallbackSeeking=true;fallback.currentTime=t}}
+  requestAnimationFrame(tick)}
+ requestAnimationFrame(tick);
+ addEventListener('pagehide',()=>{cancelled=true;frames.forEach(f=>f.close());frames=[];if(frameVideo){frameVideo.removeAttribute('src');frameVideo.load()}if(objectUrl)URL.revokeObjectURL(objectUrl)},{once:true});
+})();
+
+load();setInterval(load,30000);
 </script>
 </body>
 </html>
