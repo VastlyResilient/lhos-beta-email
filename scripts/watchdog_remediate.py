@@ -17,7 +17,9 @@ N8N_KEY=os.environ["N8N_API_KEY"]
 WF_ID=os.environ["LHOS_WORKFLOW_ID"]
 BACKEND=os.environ["LHOS_BACKEND_URL"].rstrip("/")
 TOKEN=os.environ["LHOS_AUTOMATION_TOKEN"]
-HEARTBEAT_URL=os.environ.get("HEARTBEAT_URL","").strip()
+HEARTBEAT_URL=os.environ.get("HEARTBEAT_URL","").strip()          # coarse liveness ping
+HEARTBEAT_FAIL_URL=os.environ.get("HEARTBEAT_FAIL_URL","").strip() # explicit /fail signal
+DAILY_OUTCOME_URL=os.environ.get("DAILY_OUTCOME_URL","").strip()   # once/day business outcome
 
 def http(url,method="GET",headers=None,body=None,timeout=60):
     req=urllib.request.Request(url,method=method,data=(json.dumps(body).encode() if body is not None else None))
@@ -81,8 +83,8 @@ else:
             stale=True;log("DETECT: no prepare heartbeat during active window.")
         else:
             age=(now-datetime.datetime.fromisoformat(last)).total_seconds()
-            if age>300:
-                stale=True;log(f"DETECT: prepare heartbeat is {int(age)}s stale (>300s) during active window.")
+            if age>720:
+                stale=True;log(f"DETECT: prepare heartbeat is {int(age)}s stale (>720s) during active window.")
             else:
                 log(f"OK: prepare heartbeat {int(age)}s old.")
     else:
@@ -116,10 +118,30 @@ if stale and st==200 and wf.get("active"):
 wst,wb=backend("/api/lhos/automation/watchdog")
 log(f"backend watchdog -> HTTP {wst} {str(wb)[:180]}")
 
-# ---------- 6. Dead-man's-switch ping (only if everything above is clean) ----------
-if HEARTBEAT_URL and not escalate:
-    pst,_=http(HEARTBEAT_URL,timeout=20)
-    log(f"heartbeat ping -> {pst}")
+# ---------- 6. Dead-man's-switch signalling ----------
+def ping(url,label):
+    """Monitoring over the public internet is unreliable; retry before believing a miss."""
+    for attempt in range(5):
+        st,_=http(url,timeout=15)
+        if 200<=st<300:
+            log(f"{label} ping -> {st}");return True
+        time.sleep(2*(attempt+1))
+    log(f"{label} ping FAILED after retries (last={st})");return False
+
+if escalate:
+    # Explicit failure signal = instant detection instead of waiting out the grace period.
+    if HEARTBEAT_FAIL_URL:ping(HEARTBEAT_FAIL_URL,"heartbeat /fail")
+else:
+    if HEARTBEAT_URL:ping(HEARTBEAT_URL,"coarse liveness")
+
+# Business-outcome heartbeat: only ping when the DAY actually reached a verified
+# terminal state. A green liveness ping must never imply the edition shipped.
+if DAILY_OUTCOME_URL and sst==200:
+    stage=((state or {}).get("state") or {}).get("stage")
+    if stage in ("sent","sent_external"):
+        ping(DAILY_OUTCOME_URL,"daily outcome (delivered)")
+    else:
+        log(f"daily outcome NOT pinged (stage={stage}) - absence is the signal")
 
 print("\n===== SUMMARY =====")
 for a in actions:print(" .",a)

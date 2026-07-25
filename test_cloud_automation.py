@@ -193,4 +193,28 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'now_et',return_value=at),patch.object(ca,'SEND_POLICY','ON_APPROVAL'),patch.object(ca,'gmail_search',return_value=[{'id':'ok1'}]),patch.object(ca,'gmail_get',return_value=msg):
    r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(calls,['id'],f'aligned DKIM should authorize: {r.json()}')
+
+ def _pl(self,*hs):return {'headers':[{'name':n,'value':v} for n,v in hs]}
+ def test_header_injection_forged_auth_results_rejected(self):
+  """Attacker appends their own Authentication-Results; Google's real verdict is topmost."""
+  pay=self._pl(('Authentication-Results','mx.google.com; dkim=fail; spf=fail; dmarc=fail'),
+               ('Authentication-Results','attacker.example; dkim=pass header.i=@example.com; dmarc=pass'))
+  ok,v=ca.sender_authenticated('a@example.com',pay)
+  self.assertFalse(ok,'topmost (real) Authentication-Results must win')
+ def test_untrusted_authserv_rejected(self):
+  pay=self._pl(('Authentication-Results','evil.example; dkim=pass header.i=@example.com; dmarc=pass'))
+  ok,v=ca.sender_authenticated('a@example.com',pay)
+  self.assertFalse(ok);self.assertEqual(v['basis'],'untrusted_authserv')
+ def test_dkim_pass_for_attacker_domain_rejected(self):
+  pay=self._pl(('Authentication-Results','mx.google.com; dkim=pass header.i=@attacker.com; spf=pass; dmarc=pass'))
+  ok,_=ca.sender_authenticated('a@example.com',pay)
+  self.assertFalse(ok,'DKIM must be ALIGNED to the From domain')
+ def test_rfc3834_auto_submitted_detected(self):
+  self.assertTrue(ca.is_auto_submitted(self._pl(('Auto-Submitted','auto-replied'))))
+  self.assertTrue(ca.is_auto_submitted(self._pl(('Precedence','list'))))
+  self.assertFalse(ca.is_auto_submitted(self._pl(('Auto-Submitted','no'))))
+ def test_arc_fallback_only_when_no_primary(self):
+  pay=self._pl(('ARC-Authentication-Results','mx.google.com; dkim=pass header.i=@example.com; dmarc=pass'))
+  ok,v=ca.sender_authenticated('a@example.com',pay)
+  self.assertTrue(ok);self.assertEqual(v['source'],'arc-authentication-results')
 if __name__=='__main__':unittest.main()

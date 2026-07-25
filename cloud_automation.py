@@ -174,26 +174,63 @@ def revise_with_glm(raw,feedback):
 
 
 AUTH_REQUIRED=os.getenv("REQUIRE_DMARC","1").strip() not in ("0","false","False")
-def auth_verdicts(headers_lower):
-    """Parse Gmail's Authentication-Results. Gmail stamps this itself at delivery time,
-    so it cannot be forged by the sender. ARC-Authentication-Results is used only as a
-    fallback for legitimately forwarded mail."""
-    raw=headers_lower.get("authentication-results") or ""
-    if not raw:raw=headers_lower.get("arc-authentication-results") or ""
-    flat=" ".join(raw.split())
+TRUSTED_AUTHSERV=os.getenv("TRUSTED_AUTHSERV","mx.google.com").strip().lower()
+
+def _header_list(payload,name):
+    """Return ALL values for a header, in original order (top to bottom)."""
+    n=name.lower();return [x.get("value","") for x in (payload.get("headers") or []) if x.get("name","").lower()==n]
+
+def auth_verdicts(payload):
+    """Parse Gmail's Authentication-Results.
+
+    RFC 8601 hardening (this matters):
+      * A sender composes their own message, so they CAN inject a forged
+        Authentication-Results header. Google PREPENDS its own at the top, so we
+        must take the TOPMOST instance only and ignore anything below it.
+      * We additionally pin the authserv-id to our trusted border MTA
+        (mx.google.com); a header claiming any other authserv-id is not evidence.
+      * Never read auth results out of a forwarded/quoted body -- only top-level
+        headers of the message Gmail itself received.
+    """
+    vals=_header_list(payload,"authentication-results")
+    source="authentication-results"
+    if not vals:
+        vals=_header_list(payload,"arc-authentication-results");source="arc-authentication-results"
+    if not vals:
+        return {"raw":"","dkim":None,"spf":None,"dmarc":None,"dkim_domain":None,"authserv":None,"source":None,"instances":0}
+    flat=" ".join(vals[0].split())          # TOPMOST only
+    authserv=flat.split(";",1)[0].strip().lower() if ";" in flat else flat.strip().lower()
     def grab(name):
         m=re.search(name+r"=(\w+)",flat);return m.group(1).lower() if m else None
     dom=re.search(r"header\.i=@([\w.\-]+)",flat) or re.search(r"header\.d=([\w.\-]+)",flat)
-    return {"raw":flat[:400],"dkim":grab("dkim"),"spf":grab("spf"),"dmarc":grab("dmarc"),"dkim_domain":(dom.group(1).lower() if dom else None)}
+    return {"raw":flat[:400],"dkim":grab("dkim"),"spf":grab("spf"),"dmarc":grab("dmarc"),
+            "dkim_domain":(dom.group(1).lower() if dom else None),"authserv":authserv,
+            "source":source,"instances":len(vals)}
 
-def sender_authenticated(addr,headers_lower):
-    """Fail closed: an approver's message must be cryptographically attributable.
-    Accept on dmarc=pass, or dkim=pass with the DKIM domain aligned to the From domain."""
-    v=auth_verdicts(headers_lower)
-    if not AUTH_REQUIRED:return True,{**v,"enforced":False}
+def is_auto_submitted(payload):
+    """RFC 3834: auto-responders stamp Auto-Submitted with a keyword other than 'no'.
+    Anything not explicitly 'no' is treated as machine-generated and cannot approve."""
+    for v in _header_list(payload,"auto-submitted"):
+        if v.strip().lower() not in ("","no"):return True
+    for h in ("x-autoreply","x-autorespond","x-auto-response-suppress"):
+        if _header_list(payload,h):return True
+    for v in _header_list(payload,"precedence"):
+        if v.strip().lower() in ("bulk","junk","auto_reply","list"):return True
+    return False
+
+def sender_authenticated(addr,payload):
+    """Fail closed: an approver's message must be cryptographically attributable
+    to the From domain, as judged by OUR border MTA."""
+    v=auth_verdicts(payload)
+    if not AUTH_REQUIRED:return True,{**v,"enforced":False,"basis":"enforcement_disabled"}
+    if not v.get("source"):return False,{**v,"basis":"no_auth_results"}
+    if TRUSTED_AUTHSERV and v.get("authserv") and TRUSTED_AUTHSERV not in v["authserv"]:
+        return False,{**v,"basis":"untrusted_authserv"}
     from_domain=(addr.rsplit("@",1)[-1] or "").lower()
-    if v["dmarc"]=="pass":return True,{**v,"basis":"dmarc_pass"}
-    if v["dkim"]=="pass" and v["dkim_domain"] and from_domain and (v["dkim_domain"]==from_domain or from_domain.endswith("."+v["dkim_domain"])):
+    aligned=bool(v["dkim_domain"] and from_domain and (v["dkim_domain"]==from_domain or from_domain.endswith("."+v["dkim_domain"])))
+    if v["dmarc"]=="pass" and (aligned or not v["dkim_domain"]):
+        return True,{**v,"basis":"dmarc_pass"}
+    if v["dkim"]=="pass" and aligned:
         return True,{**v,"basis":"dkim_aligned"}
     return False,{**v,"basis":"unauthenticated"}
 
@@ -302,8 +339,8 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             for mid in ids:
                 if mid in processed:continue
                 msg=gmail_get(token,mid);h=headers_map(msg.get('payload',{}));addr=parseaddr(h.get('from',''))[1].strip().lower();subj=dec_header(h.get('subject',''));body=clean_reply(extract_gmail_body(msg.get('payload',{}))+'\n'+gmail_docx_attachments(token,mid,msg.get('payload',{})))
-                auto=str(h.get('auto-submitted','')).lower();precedence=str(h.get('precedence','')).lower();is_auto=('auto-replied' in auto or 'auto-generated' in auto or precedence in ('bulk','junk','auto_reply') or bool(h.get('x-autoreply')) or bool(h.get('x-autorespond')) or 'out of office' in subj.lower() or subj.lower().startswith('automatic reply'))
-                authed,verdict=sender_authenticated(addr,h)
+                pl=msg.get('payload',{});is_auto=is_auto_submitted(pl) or 'out of office' in subj.lower() or subj.lower().startswith('automatic reply')
+                authed,verdict=sender_authenticated(addr,pl)
                 records.append({"id":mid,"internal":int(msg.get("internalDate",0)),"addr":addr,"subject":subj,"body":body,"authenticated":authed,"auth":verdict,"is_auto":is_auto})
             records.sort(key=lambda x:(x["internal"],x["id"]));actions=[]
             for rec in records:
