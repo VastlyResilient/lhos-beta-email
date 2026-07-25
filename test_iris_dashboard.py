@@ -2,11 +2,13 @@ import unittest
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from iris_dashboard import build_snapshot
+from iris_dashboard import DASHBOARD_HTML, build_snapshot
 
 ET=ZoneInfo("America/New_York")
 
 class IrisDashboardHealthTests(unittest.TestCase):
+ def test_dashboard_includes_inline_favicon(self):
+  self.assertIn('rel="icon"',DASHBOARD_HTML)
  def snap(self, *, now=None, state=None, heartbeat=None, connectors=None, reports=None, alerts=None):
   now=now or datetime(2026,7,25,14,0,tzinfo=ET)
   return build_snapshot(now=now,state=state or {},heartbeat=heartbeat or {},connectors=connectors or {"google":"green","detail":"OAuth refresh and Google APIs verified."},reports=reports or {},alerts=alerts or {})
