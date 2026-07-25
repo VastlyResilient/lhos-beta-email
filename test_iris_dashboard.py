@@ -32,6 +32,7 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn("smoothed+=(target-smoothed)*.1",DASHBOARD_HTML)
   self.assertIn('devicePixelRatio',DASHBOARD_HTML)
   self.assertIn('prefers-reduced-motion',DASHBOARD_HTML)
+  self.assertIn('.awareness-layout{align-self:stretch;width:100%}',DASHBOARD_HTML)
  def test_cinematic_dashboard_has_accessible_fallback_and_controls(self):
   self.assertIn('id="fallbackVideo"',DASHBOARD_HTML)
   self.assertIn('id="videoCanvas"',DASHBOARD_HTML)
