@@ -489,7 +489,7 @@ function render(d){
  txt('sysWatchValue',val(w,'Online','Delayed','Stale'));setLight($('sysWatchValue'),w.light);txt('sysWatchSub',w.detail);
  setLight($('sysWatchChip'),w.light);$('sysWatchChip').lastChild.textContent=w.light==='green'?'Self-healing active':w.light==='orange'?'Self-healing delayed':'Self-healing unverified';
  const repair=L==='red';
- setLight($('sysStripDot'),L);$('sysStripText').innerHTML=(w.light==='green'?'Self-healing coverage active':'Self-healing coverage '+w.light)+' &nbsp;•&nbsp; Manual repair needed: <b>'+(repair?'Yes':'No')+'</b>';
+ setLight($('sysStripDot'),L);$('sysStripText').innerHTML='Self-healing coverage '+({green:'active',orange:'delayed',red:'unverified'}[w.light])+' &nbsp;•&nbsp; Manual repair needed: <b>'+(repair?'Yes':'No')+'</b>';
  /* edition */
  const e=d.edition;
  setLight($('edPill'),e.light);txt('edPillText',e.label);
@@ -498,7 +498,8 @@ function render(d){
   :o.label+'. '+o.detail;
  setLight($('edReassure'),e.light);txt('edReassureText',reassure);
  const stepText={done:'Complete',pending:'Not started'};
- const currentText={content:e.light==='orange'?'Waiting for file':'Processing',review:'In review',approval:'Awaiting approval',delivery:'Sending'};
+ const notSent=(e.label||'').toLowerCase().includes('not sent')||(e.stage||'')==='not_sent';
+ const currentText={content:e.light==='orange'?(notSent?'Not received':'Waiting for file'):'Processing',review:'In review',approval:'Awaiting approval',delivery:notSent?'Safely held — no send':e.light==='red'?'Failed':'Sending'};
  const tl=$('edTimeline');tl.replaceChildren();
  e.steps.forEach((st,i)=>{const el=document.createElement('div');el.className='tl-step '+st.state;
   const light=st.state==='done'?'green':st.state==='current'?e.light:'muted';
