@@ -150,16 +150,21 @@ def billing_canary():
     st,r=http(f"https://api.github.com/repos/{repo}/actions/runs?per_page=100&created=%3E{since}",headers=hdr,timeout=20)
     runs=(r.get("workflow_runs") if isinstance(r,dict) else None) or []
     if st!=200 or not runs:log(f"Billing canary skipped (runs API {st}).");return
-    total_ms=0;sampled=0
+    billable_ms=0;sampled=0
     for run in runs[:5]:
         st2,t=http(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/timing",headers=hdr,timeout=20)
-        if st2==200 and isinstance(t,dict):total_ms+=t.get("run_duration_ms",0);sampled+=1
+        if st2==200 and isinstance(t,dict):
+            billable_ms+=sum(float(v.get("total_ms",0) or 0) for v in (t.get("billable") or {}).values())
+            sampled+=1
     if not sampled:log("Billing canary skipped (no timing samples).");return
-    avg_min=(total_ms/sampled)/60000
+    if billable_ms==0:
+        log("OK: GitHub Actions reports 0 billable compute (public repo/standard runner); no Actions-minutes billing risk.")
+        return
+    avg_min=(billable_ms/sampled)/60000
     monthly=avg_min*len(runs)*30
-    log(f"OK: Actions burn ~{avg_min:.1f} min/run x {len(runs)} runs/day = ~{monthly:.0f} min/mo projected (free tier 2000).")
+    log(f"OK: Actions billable burn ~{avg_min:.1f} min/run x {len(runs)} runs/day = ~{monthly:.0f} min/mo projected.")
     if monthly>1600:
-        escalate.append(f"GitHub Actions projected at ~{monthly:.0f} min/mo (>80% of free tier). Watchdog may stop before month end - trim schedule or add payment method.")
+        escalate.append(f"GitHub Actions projected at ~{monthly:.0f} billable min/mo (>80% of a 2,000-minute allowance). Watchdog may stop before month end - trim schedule or add payment method.")
 
 
 
