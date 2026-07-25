@@ -21,6 +21,34 @@ HEARTBEAT_URL=os.environ.get("HEARTBEAT_URL","").strip()          # coarse liven
 HEARTBEAT_FAIL_URL=os.environ.get("HEARTBEAT_FAIL_URL","").strip() # explicit /fail signal
 DAILY_OUTCOME_URL=os.environ.get("DAILY_OUTCOME_URL","").strip()   # once/day business outcome
 
+RAILWAY_TOKEN=os.environ.get("RAILWAY_TOKEN","").strip()
+# Railway topology (resolved 2026-07-25). Services restart via deploymentRestart
+# on the latest deployment. These IDs are stable across redeploys.
+RW_GQL="https://backboard.railway.app/graphql/v2"
+RW_SERVICES={
+    "backend":{"project":"03624831-628a-4ade-8544-13e86c4389bb","service":"b6668301-a78a-45a7-8acf-3273a34b034c","env":"d1831663-ea6f-4e7f-bd8f-09bc0b09084c"},
+    "n8n":{"project":"7e034a23-6b1a-43d7-859c-648522d4419d","service":"94e0fd8e-0abe-47e5-9115-e176d181cbf6","env":"6cfb7ae1-9402-49c8-b127-a3bc7c2be823"},
+}
+
+def rw_gql(query,variables=None):
+    if not RAILWAY_TOKEN:return None,"no RAILWAY_TOKEN"
+    return http(RW_GQL,method="POST",headers={"Authorization":f"Bearer {RAILWAY_TOKEN}"},
+                body={"query":query,"variables":variables or {}},timeout=30)
+
+def rw_restart(which):
+    """Restart a Railway service by restarting its latest deployment. Idempotent-ish:
+    Railway serializes restarts; calling on an already-restarting deployment is a no-op."""
+    svc=RW_SERVICES.get(which)
+    if not svc:return False,f"unknown service {which}"
+    q="query($in:DeploymentListInput!){ deployments(first:1, input:$in){ edges { node { id status } } } }"
+    st,res=rw_gql(q,{"in":{"serviceId":svc["service"],"environmentId":svc["env"],"projectId":svc["project"]}})
+    edges=(((res or {}).get("data") or {}).get("deployments") or {}).get("edges") or []
+    if st!=200 or not edges:return False,f"cannot find deployment for {which} (gql {st})"
+    dep=edges[0]["node"]["id"]
+    st2,res2=rw_gql("mutation($id:String!){ deploymentRestart(id:$id) }",{"id":dep})
+    ok=st2==200 and not (res2 or {}).get("errors")
+    return ok,(f"deploymentRestart({which}/{dep[:8]}) -> gql {st2} "+("" if ok else str(res2)[:150]))
+
 def http(url,method="GET",headers=None,body=None,timeout=60):
     req=urllib.request.Request(url,method=method,data=(json.dumps(body).encode() if body is not None else None))
     for k,v in (headers or {}).items():req.add_header(k,v)
@@ -47,8 +75,15 @@ def log(msg):
 # ---------- 1. Is the production workflow still active? ----------
 st,wf=n8n(f"/workflows/{WF_ID}")
 if st!=200:
-    escalate.append(f"Cannot read workflow {WF_ID} from n8n API (HTTP {st}): {str(wf)[:200]}")
-else:
+    # KNOWN FAILURE: n8n container wedged (scheduler dead, UI unresponsive). Restart it.
+    log(f"DETECT: n8n API unreachable (HTTP {st}). Attempting Railway restart of n8n service.")
+    ok,msg=rw_restart("n8n");log(f"REPAIR: {msg}")
+    if ok:
+        time.sleep(90)
+        st,wf=n8n(f"/workflows/{WF_ID}")
+    if st!=200:
+        escalate.append(f"n8n unreachable (HTTP {st}) AND Railway restart did not recover it: {str(wf)[:200]}")
+if st==200:
     if not wf.get("active"):
         # KNOWN FAILURE: n8n silently self-deactivates after redeploy / stack-size errors.
         log(f"REPAIR: workflow '{wf.get('name')}' was INACTIVE. Reactivating via Public API.")
@@ -56,14 +91,31 @@ else:
         if rst==200:
             log("REPAIR OK: activate returned 200.")
         else:
-            escalate.append(f"Reactivation FAILED (HTTP {rst}): {str(rb)[:200]}")
+            log(f"DETECT: reactivation failed (HTTP {rst}). Attempting Railway restart of n8n.")
+            ok,msg=rw_restart("n8n");log(f"REPAIR: {msg}")
+            if ok:
+                time.sleep(90)
+                rst,rb=n8n(f"/workflows/{WF_ID}/activate",method="POST")
+                st2,wf2=n8n(f"/workflows/{WF_ID}")
+            if rst==200 and st2==200 and wf2.get("active"):
+                log("REPAIR OK: workflow active after n8n restart + reactivate.")
+            else:
+                escalate.append(f"Workflow inactive and BOTH reactivate (HTTP {rst}) and n8n restart failed to restore it.")
     else:
         log(f"OK: workflow '{wf.get('name')}' is active.")
 
 # ---------- 2. Is the backend healthy? ----------
 hst,hb=http(f"{BACKEND}/health")
 if hst!=200:
-    escalate.append(f"Backend /health unhealthy (HTTP {hst}): {str(hb)[:200]}")
+    log(f"DETECT: backend /health unhealthy (HTTP {hst}). Attempting Railway restart.")
+    ok,msg=rw_restart("backend");log(f"REPAIR: {msg}")
+    if ok:
+        time.sleep(90)
+        hst,hb=http(f"{BACKEND}/health")
+    if hst==200:
+        log("REPAIR OK: backend healthy after Railway restart.")
+    else:
+        escalate.append(f"Backend /health unhealthy (HTTP {hst}) AND Railway restart did not recover it: {str(hb)[:200]}")
 else:
     log("OK: backend /health 200.")
 

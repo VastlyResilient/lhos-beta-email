@@ -1,6 +1,8 @@
 name: LHOS Cloud Automation Watchdog
 
 on:
+  repository_dispatch:
+    types: [healthchecks-down]
   schedule:
     # Every 10 min across the ET active window (UTC). Off-peak minutes (:07/:17...)
     # because GitHub delays/drops schedules that land on :00 under load.
@@ -35,4 +37,5 @@ jobs:
           HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL }}
           HEARTBEAT_FAIL_URL: ${{ secrets.HEARTBEAT_FAIL_URL }}
           DAILY_OUTCOME_URL: ${{ secrets.DAILY_OUTCOME_URL }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: python scripts/watchdog_remediate.py
