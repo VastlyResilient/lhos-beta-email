@@ -1,4 +1,4 @@
-import tempfile,unittest,base64,zipfile,io
+import tempfile,unittest,base64,zipfile,io,json
 from pathlib import Path
 from unittest.mock import patch
 from fastapi import FastAPI
@@ -64,9 +64,11 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'now_et',return_value=at16),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'x.docx'})):
    r=app.post('/api/lhos/automation/manual-send',headers={'x-lhos-automation-token':'secret'},json={'date':date,'confirm':f'SEND {date} LATE TO ACTIVE BETA TESTERS'})
   self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'manual_send_executed');self.assertEqual(len(calls),1);self.assertTrue(approvals[0][1]['manual_override'])
- def _gmail_message(self,mid,from_addr,subject,body,internal):
+ def _gmail_message(self,mid,from_addr,subject,body,internal,auth='dkim=pass header.i=@example.com; spf=pass; dmarc=pass'):
   enc=base64.urlsafe_b64encode(body.encode()).decode().rstrip('=')
-  return {'id':mid,'internalDate':str(internal),'payload':{'headers':[{'name':'From','value':from_addr},{'name':'Subject','value':subject}],'mimeType':'text/plain','body':{'data':enc}}}
+  hs=[{'name':'From','value':from_addr},{'name':'Subject','value':subject}]
+  if auth:hs.append({'name':'Authentication-Results','value':'mx.google.com; '+auth})
+  return {'id':mid,'internalDate':str(internal),'payload':{'headers':hs,'mimeType':'text/plain','body':{'data':enc}}}
  def test_direct_authorized_inbox_approval_records_only(self):
   at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);date=at8.strftime('%Y-%m-%d');state={'date':date,'date_display':'July 23, 2026','stage':'review_sent','content_valid':True,'draft_id':'old','subject':'S','review_subject':'[REVIEW] S','raw_content':'valid'};ca.atomic_json_write(ca.STATE_FILE,{date:state});approvals=[];app=self.app(approve_draft=lambda *a,**k:(approvals.append((a,k)) or {'status':'approved'}),initial_drafts={'old':{'id':'old','status':'pending_approval'}});msg=self._gmail_message('m1','Authorized <a@example.com>','Re: [REVIEW] S','Approved, please send the email.',1000)
   with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'gmail_search',return_value=[{'id':'m1'}]),patch.object(ca,'gmail_get',return_value=msg):r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
@@ -101,7 +103,7 @@ class CloudTests(unittest.TestCase):
   date=at.strftime('%Y-%m-%d')
   ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'July 24, 2026','stage':'review_sent','content_valid':True,'draft_id':'id','subject':'S','review_subject':'[REVIEW] X','raw_content':'body text'}})
   raw=base64.urlsafe_b64encode(body.encode()).decode()
-  return date,{'internalDate':'1000','payload':{'headers':[{'name':'From','value':'a@example.com'},{'name':'Subject','value':'Re: [REVIEW] X'}],'mimeType':'text/plain','body':{'data':raw}}}
+  return date,{'internalDate':'1000','payload':{'headers':[{'name':'From','value':'a@example.com'},{'name':'Subject','value':'Re: [REVIEW] X'},{'name':'Authentication-Results','value':'mx.google.com; dkim=pass header.i=@example.com; spf=pass; dmarc=pass'}],'mimeType':'text/plain','body':{'data':raw}}}
  def test_on_approval_sends_immediately(self):
   at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);date,msg=self._approval_env(at);calls=[]
   drafts={'id':{'id':'id','subject':'S','html_body':'<p>x</p>','text_body':'t','date':'July 24, 2026','status':'approved'}}
@@ -151,4 +153,44 @@ class CloudTests(unittest.TestCase):
   app=self.app(send_email=lambda *a:None)
   with patch.object(ca,'now_et',return_value=at):r=app.post('/api/lhos/automation/close-out',headers={'x-lhos-automation-token':'secret'})
   self.assertFalse(r.json()['incident'])
+
+ def _msg(self,frm,body,ar='dkim=pass header.i=@example.com; spf=pass; dmarc=pass',extra=None):
+  hs=[{'name':'From','value':frm},{'name':'Subject','value':'Re: [REVIEW] X'}]
+  if ar is not None:hs.append({'name':'Authentication-Results','value':'mx.google.com; '+ar})
+  for k,v in (extra or {}).items():hs.append({'name':k,'value':v})
+  return {'internalDate':'1000','payload':{'headers':hs,'mimeType':'text/plain','body':{'data':base64.urlsafe_b64encode(body.encode()).decode()}}}
+ def _state(self,at):
+  date=at.strftime('%Y-%m-%d')
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'July 24, 2026','stage':'review_sent','content_valid':True,'draft_id':'id','subject':'S','review_subject':'[REVIEW] X','raw_content':'body'}})
+  return date
+ def test_spoofed_from_cannot_approve(self):
+  at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);self._state(at)
+  # Correct allow-listed address, but authentication FAILS -> must never send
+  msg=self._msg('a@example.com','Approved, send it.',ar='dkim=fail; spf=softfail; dmarc=fail')
+  app=self.app(send_email=lambda *a:None,initial_drafts={'id':{'id':'id','status':'approved','subject':'S','html_body':'x','text_body':'t','date':'July 24, 2026'}})
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_search',return_value=[{'id':'sp1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200)
+  txt=json.dumps(r.json());self.assertIn('failed_dmarc_authentication',txt)
+ def test_missing_auth_headers_fails_closed(self):
+  at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);self._state(at)
+  msg=self._msg('a@example.com','Approved, send it.',ar=None)
+  app=self.app(send_email=lambda *a:None,initial_drafts={'id':{'id':'id','status':'approved','subject':'S','html_body':'x','text_body':'t','date':'July 24, 2026'}})
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_search',return_value=[{'id':'na1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertIn('failed_dmarc_authentication',json.dumps(r.json()))
+ def test_out_of_office_autoreply_cannot_approve(self):
+  at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);self._state(at)
+  msg=self._msg('a@example.com','Approved - automatic reply, I am away.',extra={'Auto-Submitted':'auto-replied'})
+  app=self.app(send_email=lambda *a:None,initial_drafts={'id':{'id':'id','status':'approved','subject':'S','html_body':'x','text_body':'t','date':'July 24, 2026'}})
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_search',return_value=[{'id':'oo1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertIn('auto_reply',json.dumps(r.json()))
+ def test_dkim_aligned_authenticates_without_dmarc_verdict(self):
+  at=ca.now_et().replace(hour=9,minute=0,second=0,microsecond=0);self._state(at);calls=[]
+  msg=self._msg('a@example.com','Approved, send it to beta testers.',ar='dkim=pass header.i=@example.com; spf=pass')
+  app=self.app(send_email=lambda *a:None,send_draft=lambda d,a:(calls.append(d) or {'status':'sent','sent':27}),initial_drafts={'id':{'id':'id','status':'approved','subject':'S','html_body':'x','text_body':'t','date':'July 24, 2026'}})
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'SEND_POLICY','ON_APPROVAL'),patch.object(ca,'gmail_search',return_value=[{'id':'ok1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(calls,['id'],f'aligned DKIM should authorize: {r.json()}')
 if __name__=='__main__':unittest.main()

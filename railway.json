@@ -9,6 +9,11 @@
       {
         "path": "/data"
       }
-    ]
+    ],
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "numReplicas": 1
   }
 }

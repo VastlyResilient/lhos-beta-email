@@ -172,6 +172,31 @@ def revise_with_glm(raw,feedback):
         else:last=f"{r.status_code} {r.text[:300]}"
     raise RuntimeError("Revision failed: "+last)
 
+
+AUTH_REQUIRED=os.getenv("REQUIRE_DMARC","1").strip() not in ("0","false","False")
+def auth_verdicts(headers_lower):
+    """Parse Gmail's Authentication-Results. Gmail stamps this itself at delivery time,
+    so it cannot be forged by the sender. ARC-Authentication-Results is used only as a
+    fallback for legitimately forwarded mail."""
+    raw=headers_lower.get("authentication-results") or ""
+    if not raw:raw=headers_lower.get("arc-authentication-results") or ""
+    flat=" ".join(raw.split())
+    def grab(name):
+        m=re.search(name+r"=(\w+)",flat);return m.group(1).lower() if m else None
+    dom=re.search(r"header\.i=@([\w.\-]+)",flat) or re.search(r"header\.d=([\w.\-]+)",flat)
+    return {"raw":flat[:400],"dkim":grab("dkim"),"spf":grab("spf"),"dmarc":grab("dmarc"),"dkim_domain":(dom.group(1).lower() if dom else None)}
+
+def sender_authenticated(addr,headers_lower):
+    """Fail closed: an approver's message must be cryptographically attributable.
+    Accept on dmarc=pass, or dkim=pass with the DKIM domain aligned to the From domain."""
+    v=auth_verdicts(headers_lower)
+    if not AUTH_REQUIRED:return True,{**v,"enforced":False}
+    from_domain=(addr.rsplit("@",1)[-1] or "").lower()
+    if v["dmarc"]=="pass":return True,{**v,"basis":"dmarc_pass"}
+    if v["dkim"]=="pass" and v["dkim_domain"] and from_domain and (v["dkim_domain"]==from_domain or from_domain.endswith("."+v["dkim_domain"])):
+        return True,{**v,"basis":"dkim_aligned"}
+    return False,{**v,"basis":"unauthenticated"}
+
 def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts,send_draft,approve_draft,approvers,approval_senders,public_url,sender_email,sender_name):
     router=APIRouter(prefix="/api/lhos/automation")
     def state_all():return load(STATE_FILE,{})
@@ -276,15 +301,22 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             records=[]
             for mid in ids:
                 if mid in processed:continue
-                msg=gmail_get(token,mid);h=headers_map(msg.get('payload',{}));addr=parseaddr(h.get('from',''))[1].strip().lower();subj=dec_header(h.get('subject',''));body=clean_reply(extract_gmail_body(msg.get('payload',{}))+'\n'+gmail_docx_attachments(token,mid,msg.get('payload',{})));records.append({"id":mid,"internal":int(msg.get("internalDate",0)),"addr":addr,"subject":subj,"body":body})
+                msg=gmail_get(token,mid);h=headers_map(msg.get('payload',{}));addr=parseaddr(h.get('from',''))[1].strip().lower();subj=dec_header(h.get('subject',''));body=clean_reply(extract_gmail_body(msg.get('payload',{}))+'\n'+gmail_docx_attachments(token,mid,msg.get('payload',{})))
+                auto=str(h.get('auto-submitted','')).lower();precedence=str(h.get('precedence','')).lower();is_auto=('auto-replied' in auto or 'auto-generated' in auto or precedence in ('bulk','junk','auto_reply') or bool(h.get('x-autoreply')) or bool(h.get('x-autorespond')) or 'out of office' in subj.lower() or subj.lower().startswith('automatic reply'))
+                authed,verdict=sender_authenticated(addr,h)
+                records.append({"id":mid,"internal":int(msg.get("internalDate",0)),"addr":addr,"subject":subj,"body":body,"authenticated":authed,"auth":verdict,"is_auto":is_auto})
             records.sort(key=lambda x:(x["internal"],x["id"]));actions=[]
             for rec in records:
-                current_state=state_all().get(date_key) or state;stage=current_state.get("stage");addr=rec["addr"];body=rec["body"];subj=rec["subject"];combined=(subj+'\n'+body).lower();authorized=addr in allowed
+                current_state=state_all().get(date_key) or state;stage=current_state.get("stage");addr=rec["addr"];body=rec["body"];subj=rec["subject"];combined=(subj+'\n'+body).lower();authorized=(addr in allowed) and bool(rec.get("authenticated")) and not rec.get("is_auto")
                 relevant=bool(re.search(r'\b(lifehouse|lhos|beta(?: email| update)?|daily briefing)\b',combined,re.I)) or (current_state.get('review_subject','').lower() in subj.lower() if current_state.get('review_subject') else False) or (current_state.get('action_subject','').lower() in subj.lower() if current_state.get('action_subject') else False)
                 if not authorized:
                     if not dry_run:
                         current_state["ignored_unauthorized_inbox_count"]=int(current_state.get("ignored_unauthorized_inbox_count",0))+1;current_state["last_ignored_unauthorized_at"]=now_et().isoformat();st=state_all();st[date_key]=current_state;save_state(st);processed.add(rec["id"])
-                    actions.append({"action":"would_ignore_unauthorized" if dry_run else "ignored_unauthorized","message_id":rec["id"]});continue
+                    why=("auto_reply" if rec.get("is_auto") else ("failed_dmarc_authentication" if addr in allowed else "sender_not_allow_listed"))
+                    if addr in allowed and not rec.get("authenticated"):
+                        current_state["spoof_attempts"]=int(current_state.get("spoof_attempts",0))+1;current_state["last_spoof_at"]=now_et().isoformat()
+                        if not dry_run:st=state_all();st[date_key]=current_state;save_state(st)
+                    actions.append({"action":"would_ignore_unauthorized" if dry_run else "ignored_unauthorized","message_id":rec["id"],"reason":why,"auth":rec.get("auth",{}).get("basis")});continue
                 if stage in ("sent","sent_external"):break
                 if dry_run and (relevant or stage=="hold"):
                     return {"action":"would_process_inbox","message_id":rec["id"],"stage":stage,"from":addr,"classification":classify_instruction(body)}
