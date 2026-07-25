@@ -32,7 +32,9 @@ RW_SERVICES={
 
 def rw_gql(query,variables=None):
     if not RAILWAY_TOKEN:return None,"no RAILWAY_TOKEN"
-    return http(RW_GQL,method="POST",headers={"Authorization":f"Bearer {RAILWAY_TOKEN}"},
+    # Railway/Cloudflare rejects urllib's default Python-urllib User-Agent with 403/1010.
+    return http(RW_GQL,method="POST",headers={"Authorization":f"Bearer {RAILWAY_TOKEN}",
+                "User-Agent":"lhos-cloud-watchdog/1.0"},
                 body={"query":query,"variables":variables or {}},timeout=30)
 
 def rw_restart(which):
@@ -126,13 +128,20 @@ def oauth_canary():
     except Exception as e:
         log(f"OAuth canary inconclusive (transient): {e}")
 
+def weekly_canaries_due():
+    """Exactly once per week (Sunday 15:00 UTC), plus manual dispatches for testing.
+    Do NOT use `weekday()==6` alone: that would page every 10 minutes all Sunday."""
+    import datetime
+    now=datetime.datetime.now(datetime.timezone.utc)
+    return os.environ.get("GITHUB_EVENT_NAME")=="workflow_dispatch" or (now.weekday()==6 and now.hour==15 and now.minute<10)
+
 def billing_canary():
     """GitHub Actions free tier = 2,000 min/mo on private repos; the watchdog is the
     main consumer. The billing API needs scopes we may not have, so ESTIMATE from run
     history instead (no special scope): count runs in the last 24h, sample their
-    durations, project the month. Sundays only; warn above 80%."""
+    durations, project the month. Weekly; warn above 80%."""
     import datetime
-    if datetime.datetime.now().weekday()!=6:return  # Sundays only
+    if not weekly_canaries_due():return
     tok=os.environ.get("GITHUB_TOKEN","").strip()  # auto-provided by Actions
     repo=os.environ.get("GITHUB_REPOSITORY","")
     if not tok or not repo:return
@@ -152,8 +161,43 @@ def billing_canary():
     if monthly>1600:
         escalate.append(f"GitHub Actions projected at ~{monthly:.0f} min/mo (>80% of free tier). Watchdog may stop before month end - trim schedule or add payment method.")
 
+
+
+def railway_cost_canary():
+    """Forecast the WHOLE Railway workspace, not just LHOS. Railway exposes projected
+    resource quantities but not the final dollar total through the public API, so apply
+    the live Hobby rates shown on the Usage dashboard. Warn once/week above $10 projected
+    resource usage (=$5 over the included $5 credit)."""
+    if not weekly_canaries_due() or not RAILWAY_TOKEN:return
+    workspace="5f927a47-babf-4e8d-8497-3b6b0e0b5f22"
+    st,res=rw_gql("query($w:String!){ projects(workspaceId:$w){ edges { node { id name } } } }",{"w":workspace})
+    projects=((((res or {}).get("data") or {}).get("projects") or {}).get("edges") or [])
+    if st!=200 or not projects:
+        log(f"Railway cost canary inconclusive (projects API {st}).");return
+    rates={"CPU_USAGE":0.000463,"MEMORY_USAGE_GB":0.000231,
+           "NETWORK_TX_GB":0.05,"DISK_USAGE_GB":0.000003}
+    q="query($p:String!){ estimatedUsage(projectId:$p, measurements:[CPU_USAGE,MEMORY_USAGE_GB,NETWORK_TX_GB,DISK_USAGE_GB]){ measurement estimatedValue } }"
+    costs=[]
+    for edge in projects:
+        node=edge["node"]
+        st2,r=rw_gql(q,{"p":node["id"]})
+        rows=(((r or {}).get("data") or {}).get("estimatedUsage") or [])
+        if st2!=200:continue
+        cost=sum(float(x.get("estimatedValue") or 0)*rates.get(x.get("measurement"),0) for x in rows)
+        if cost>0:costs.append((cost,node["name"]))
+    if not costs:
+        log("Railway cost canary inconclusive (no projected-usage rows).");return
+    total=sum(c for c,_ in costs);over=max(0,total-5.0)
+    leaders=", ".join(f"{n} ${c:.2f}" for c,n in sorted(costs,reverse=True)[:4])
+    log(f"OK: Railway workspace projected ${total:.2f} resource usage (${over:.2f} above included $5). Top: {leaders}.")
+    warn=float(os.environ.get("RAILWAY_MONTHLY_WARN_DOLLARS","10.00"))
+    if total>=warn:
+        escalate.append(f"Railway workspace projected at ${total:.2f} this billing period (guardrail ${warn:.2f}; ${over:.2f} above included $5). Top projects: {leaders}. Review Railway Usage; Zilla should optimize or stop the nonessential cost driver before overage grows.")
+
+
 oauth_canary()
 billing_canary()
+railway_cost_canary()
 
 # ---------- 1. Is the production workflow still active? ----------
 st,wf=n8n(f"/workflows/{WF_ID}")
@@ -267,10 +311,12 @@ if escalate:
     # Suppress the page when the symptom is a CONFIRMED provider outage:
     # nothing to fix, retry+resume is automatic, paging Bobby is pure noise.
     outage=None
-    for e in escalate:
-        sym="google" if "oauth" in e.lower() or "gmail" in e.lower() else ("n8n" if ("n8n" in e.lower() or "workflow" in e.lower()) else "backend")
-        outage=provider_outage(sym)
-        if outage:break
+    predictive=any(any(k in e.lower() for k in ("billing","cost","usage","minutes","projected")) for e in escalate)
+    if not predictive:
+        for e in escalate:
+            sym="google" if "oauth" in e.lower() or "gmail" in e.lower() else ("n8n" if ("n8n" in e.lower() or "workflow" in e.lower()) else "backend")
+            outage=provider_outage(sym)
+            if outage:break
     if outage:
         log(f"OUTAGE SUPPRESSION: {outage}. Not paging; level-triggered loop will auto-resume when provider recovers.")
     else:
