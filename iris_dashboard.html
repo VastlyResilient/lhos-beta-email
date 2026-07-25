@@ -65,7 +65,7 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 .topbar{display:none}
 
 /* ---------- layout ---------- */
-.shell{position:relative;margin-left:224px;padding:92px 48px 40px 0;max-width:1544px;min-height:100vh;display:flex;flex-direction:column}
+.shell{position:relative;margin-left:224px;padding:92px 48px 64px 0;max-width:1544px;min-height:100vh;display:flex;flex-direction:column}
 main#app{display:flex;flex-direction:column;flex:1}
 section.page{display:none;flex:1;flex-direction:column;gap:24px}
 section.page.on{display:flex}
@@ -92,13 +92,13 @@ h1 em{font-style:italic;font-weight:400}
 .state-chip i{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 9px var(--light);font-style:normal}
 
 /* overview grid */
-.ov-grid{grid-template-columns:minmax(300px,1.05fr) repeat(3,1fr);grid-template-rows:1.35fr .75fr}
+.ov-grid{grid-template-columns:minmax(300px,1.05fr) repeat(3,1fr);grid-template-rows:1.55fr .6fr}
 .ov-health{grid-row:span 2;align-items:center;text-align:center;justify-content:flex-start}
-.ov-health .card-head{align-self:flex-start;text-align:left;margin-bottom:6px}.ov-health .card-value{font-size:52px;margin-top:auto}.ov-health .card-sub{margin-bottom:26px}
+.ov-health .card-head{align-self:flex-start;text-align:left;margin-bottom:6px}.ov-health .card-value{font-size:52px}.health-core{margin:auto 0;display:flex;flex-direction:column;align-items:center}
 .ov-api{grid-column:2/5;flex-direction:row;align-items:center;gap:20px}
 .ov-api .card-head{margin-bottom:0;flex:1}
 .ov-api .api-state{margin-left:auto;text-align:right}
-.ring-wrap{position:relative;width:148px;height:148px;margin:auto 0 22px;display:grid;place-items:center}
+.ring-wrap{position:relative;width:148px;height:148px;margin:0 0 22px;display:grid;place-items:center}
 .ring-wrap svg.ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
 .ring-wrap .ring-bg{fill:none;stroke:rgba(199,231,255,.14);stroke-width:5}
 .ring-wrap .ring-fg{fill:none;stroke:var(--light);stroke-width:5;stroke-linecap:round;stroke-dasharray:364.4;stroke-dashoffset:24;filter:drop-shadow(0 0 8px var(--light))}
@@ -264,12 +264,14 @@ h1 em{font-style:italic;font-weight:400}
  <div class="bento ov-grid">
   <article class="liquid-glass liquid-glass--primary card ov-health">
    <div class="card-head"><h2>Overall health</h2></div>
-   <div class="ring-wrap" id="ovRing">
-    <svg class="ring" viewBox="0 0 132 132" aria-hidden="true"><circle class="ring-bg" cx="66" cy="66" r="58"/><circle class="ring-fg" id="ovRingFg" cx="66" cy="66" r="58"/></svg>
-    <div class="icon-tile"><svg aria-hidden="true"><use href="#i-check-circle" id="ovRingIcon"/></svg></div>
+   <div class="health-core">
+    <div class="ring-wrap" id="ovRing">
+     <svg class="ring" viewBox="0 0 132 132" aria-hidden="true"><circle class="ring-bg" cx="66" cy="66" r="58"/><circle class="ring-fg" id="ovRingFg" cx="66" cy="66" r="58"/></svg>
+     <div class="icon-tile"><svg aria-hidden="true"><use href="#i-check-circle" id="ovRingIcon"/></svg></div>
+    </div>
+    <div class="card-value" id="ovHealthValue">Healthy</div>
+    <p class="card-sub" id="ovHealthSub">All systems operational</p>
    </div>
-   <div class="card-value" id="ovHealthValue">Healthy</div>
-   <p class="card-sub" id="ovHealthSub">All systems operational</p>
   </article>
   <article class="liquid-glass card">
    <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-link"/></svg></div><h2>Google connection</h2></div>
