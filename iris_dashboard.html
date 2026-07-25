@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#020711">
 <title>IRIS Health · LifeHouse OS</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23020711'/%3E%3Ccircle cx='32' cy='32' r='13' fill='none' stroke='%2363cfff' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%2358e6a2'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/assets/icons/raster/iris-eye-64.png">
 <style>
 :root{
  --iris-bg:#020711;--iris-surface:rgba(8,17,31,.58);--iris-surface-strong:rgba(7,15,29,.76);--iris-surface-soft:rgba(16,31,52,.42);
@@ -50,6 +50,18 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 .icon-tile{display:grid;place-items:center;width:56px;height:56px;flex:none;border-radius:18px;background:linear-gradient(148deg,rgba(126,196,255,.16),rgba(13,25,43,.24));border:1px solid rgba(199,231,255,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(99,207,255,.10),0 10px 26px rgba(0,0,0,.2);-webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%);color:#eaf6ff}
 .icon-tile svg{width:26px;height:26px;filter:drop-shadow(0 0 6px rgba(99,207,255,.35))}
 .icon-tile.sm{width:44px;height:44px;border-radius:14px}.icon-tile.sm svg{width:22px;height:22px}
+
+
+.icon-tile img{width:26px;height:26px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(99,207,255,.35))}
+.icon-tile.sm img{width:22px;height:22px}
+.rail-logo .mark img{width:27px;height:27px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(99,207,255,.5))}
+.topbar .mark img{width:20px;height:20px;object-fit:contain}
+.rail-item img{width:22px;height:22px;object-fit:contain}
+.ring-wrap .icon-tile img{width:34px;height:34px}
+.strip-item .icon-tile img{width:20px;height:20px}
+.svc-row img{width:19px;height:19px;object-fit:contain}
+.info-row .icon-tile img{width:21px;height:21px}
+.card-foot img{width:17px;height:17px;object-fit:contain}
 
 /* ---------- rail ---------- */
 .rail{position:fixed;left:32px;top:44px;bottom:48px;width:118px;z-index:50;text-shadow:0 1px 10px rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;padding:24px 10px 100px;border-radius:30px}
@@ -223,7 +235,7 @@ h1 em{font-style:italic;font-weight:400}
 </style>
 </head>
 <body>
-<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><symbol id="i-iris-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 12C5.9 7.2 9.4 5 12 5s6.1 2.2 9.2 7c-3.1 4.8-6.6 7-9.2 7s-6.1-2.2-9.2-7Z"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></symbol><symbol id="i-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4.4L10 6.8l3.8 10.4L16.2 12H21"/></symbol><symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6 20.8 8 12 12.4 3.2 8 12 3.6Z"/><path d="m4.6 12 7.4 3.7L19.4 12"/><path d="m4.6 15.6 7.4 3.7 7.4-3.7"/></symbol><symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.8h7.2l4.6 4.6v11.8H6.5V3.8Z"/><path d="M13.7 3.8v4.6h4.6"/><path d="M9.4 12.2h5.8M9.4 15.4h4.2"/></symbol><symbol id="i-arrow-ahead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M5.5 15.5c4.8 0 9-2.1 11-6"/><path d="m13.2 8.6 3.6-.8.8 3.6"/></symbol><symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="m8.2 12.4 2.7 2.7 5-5.4"/></symbol><symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.4" rx="7.6" ry="2.9"/><path d="M4.4 6.4v11.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V6.4"/><path d="M4.4 12c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9"/></symbol><symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.5-2.5a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"/><path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.5 2.5a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"/></symbol><symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.4V12l3.2 2"/></symbol><symbol id="i-shield-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 19 6v5.3c0 4.3-2.9 7.4-7 8.9-4.1-1.5-7-4.6-7-8.9V6l7-2.6Z"/><path d="M9.2 13.6a1.9 1.9 0 0 1 .5-3.7 2.5 2.5 0 0 1 4.8.6 1.7 1.7 0 0 1-.4 3.1H9.2Z"/></symbol><symbol id="i-doc-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4.8h6.4l4.1 4.1v6.3"/><path d="M11.9 4.8v4.1H16"/><path d="M5.5 4.8v14.4h7.2"/><path d="m17.6 14.8.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></symbol><symbol id="i-clock-poll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.8 12a7.8 7.8 0 1 1-2.3-5.5"/><path d="M19.9 3.6v3.4h-3.4"/><path d="M12 8.4V12l2.7 1.7"/></symbol><symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 3.6 10.6 13.8"/><path d="M20.8 3.6 14.3 20.4l-3.7-6.6L4 10.1 20.8 3.6Z"/></symbol><symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.2a5.3 5.3 0 0 1 5.3 5.3c0 3.8 1.4 5.2 1.4 5.2H5.3s1.4-1.4 1.4-5.2A5.3 5.3 0 0 1 12 4.2Z"/><path d="M10.2 18.2a1.9 1.9 0 0 0 3.6 0"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.2A8.4 8.4 0 0 0 5.7 6.5"/><path d="M20 3.6v4.6h-4.6"/><path d="M4 15.8a8.4 8.4 0 0 0 14.3 1.7"/><path d="M4 20.4v-4.6h4.6"/></symbol><symbol id="i-clock-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.6" cy="10.6" r="6.8"/><path d="M10.6 7.2v3.4l2.3 1.4"/><path d="m15.4 15.4 4.4 4.4M18.4 18.4l1.4-1.4M16.6 16.6l1.2-1.2"/></symbol><symbol id="i-shield-heal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 19 6v5.3c0 4.3-2.9 7.4-7 8.9-4.1-1.5-7-4.6-7-8.9V6l7-2.6Z"/><path d="M14.9 10.4a3.3 3.3 0 1 0 .4 3.2"/><path d="M15.4 8.6v2h-2"/></symbol><symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v4.6"/><circle cx="12" cy="8" r="0.7" fill="currentColor" stroke="none"/></symbol></svg>
+
 <div class="scroll-video" aria-hidden="true">
  <video id="fallbackVideo" muted playsinline preload="auto" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4"></video>
  <canvas id="videoCanvas"></canvas>
@@ -238,20 +250,20 @@ h1 em{font-style:italic;font-weight:400}
 
 <aside class="rail liquid-glass" aria-label="IRIS Health navigation">
  <div class="rail-logo">
-  <div class="mark"><svg aria-hidden="true"><use href="#i-iris-eye"/></svg></div>
+  <div class="mark"><img src="/assets/icons/raster/iris-eye.webp" srcset="/assets/icons/raster/iris-eye-64.png 64w, /assets/icons/raster/iris-eye-128.png 128w, /assets/icons/raster/iris-eye-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div>
   <span>IRIS</span>
  </div>
  <nav class="rail-nav" aria-label="Dashboard sections">
-  <a class="rail-item" href="#overview" data-nav="overview" aria-current="page" aria-label="Overview — live IRIS health"><svg aria-hidden="true"><use href="#i-pulse"/></svg>Overview</a>
-  <a class="rail-item" href="#systems" data-nav="systems" aria-label="Core systems status"><svg aria-hidden="true"><use href="#i-layers"/></svg>Systems</a>
-  <a class="rail-item" href="#edition" data-nav="edition" aria-label="Today’s edition workflow"><svg aria-hidden="true"><use href="#i-doc"/></svg>Edition</a>
-  <a class="rail-item" href="#ahead" data-nav="ahead" aria-label="Advance awareness"><svg aria-hidden="true"><use href="#i-arrow-ahead"/></svg>Ahead</a>
+  <a class="rail-item" href="#overview" data-nav="overview" aria-current="page" aria-label="Overview — live IRIS health"><img src="/assets/icons/raster/pulse.webp" srcset="/assets/icons/raster/pulse-64.png 64w, /assets/icons/raster/pulse-128.png 128w, /assets/icons/raster/pulse-256.png 256w" sizes="34px" alt="" aria-hidden="true">Overview</a>
+  <a class="rail-item" href="#systems" data-nav="systems" aria-label="Core systems status"><img src="/assets/icons/raster/layers.webp" srcset="/assets/icons/raster/layers-64.png 64w, /assets/icons/raster/layers-128.png 128w, /assets/icons/raster/layers-256.png 256w" sizes="34px" alt="" aria-hidden="true">Systems</a>
+  <a class="rail-item" href="#edition" data-nav="edition" aria-label="Today’s edition workflow"><img src="/assets/icons/raster/doc.webp" srcset="/assets/icons/raster/doc-64.png 64w, /assets/icons/raster/doc-128.png 128w, /assets/icons/raster/doc-256.png 256w" sizes="34px" alt="" aria-hidden="true">Edition</a>
+  <a class="rail-item" href="#ahead" data-nav="ahead" aria-label="Advance awareness"><img src="/assets/icons/raster/arrow-ahead.webp" srcset="/assets/icons/raster/arrow-ahead-64.png 64w, /assets/icons/raster/arrow-ahead-128.png 128w, /assets/icons/raster/arrow-ahead-256.png 256w" sizes="34px" alt="" aria-hidden="true">Ahead</a>
  </nav>
  <div class="rail-live"><span class="live-dot" id="railLiveDot"></span>LIVE</div>
 </aside>
 
 <header class="topbar">
- <div class="mark"><svg aria-hidden="true"><use href="#i-iris-eye"/></svg></div>
+ <div class="mark"><img src="/assets/icons/raster/iris-eye.webp" srcset="/assets/icons/raster/iris-eye-64.png 64w, /assets/icons/raster/iris-eye-128.png 128w, /assets/icons/raster/iris-eye-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div>
  <nav aria-label="Dashboard sections">
   <a class="rail-item" href="#overview" data-nav="overview" aria-current="page">Overview</a>
   <a class="rail-item" href="#systems" data-nav="systems">Systems</a>
@@ -280,37 +292,37 @@ h1 em{font-style:italic;font-weight:400}
    <div class="health-core">
     <div class="ring-wrap" id="ovRing">
      <svg class="ring" viewBox="0 0 132 132" aria-hidden="true"><circle class="ring-bg" cx="66" cy="66" r="58"/><circle class="ring-fg" id="ovRingFg" cx="66" cy="66" r="58"/></svg>
-     <div class="icon-tile"><svg aria-hidden="true"><use href="#i-check-circle" id="ovRingIcon"/></svg></div>
+     <div class="icon-tile"><img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true" id="ovRingIcon"></div>
     </div>
     <div class="card-value" id="ovHealthValue">Healthy</div>
     <p class="card-sub" id="ovHealthSub">All systems operational</p>
    </div>
   </article>
   <article class="liquid-glass card">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-link"/></svg></div><h2>Google connection</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/link.webp" srcset="/assets/icons/raster/link-64.png 64w, /assets/icons/raster/link-128.png 128w, /assets/icons/raster/link-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Google connection</h2></div>
    <div class="card-value sm" id="ovGoogleValue">Connected</div>
    <p class="card-sub" id="ovGoogleSub"></p>
   </article>
   <article class="liquid-glass card">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-clock"/></svg></div><h2>Scheduler</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/clock.webp" srcset="/assets/icons/raster/clock-64.png 64w, /assets/icons/raster/clock-128.png 128w, /assets/icons/raster/clock-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Scheduler</h2></div>
    <div class="card-value sm" id="ovSchedValue">Every minute</div>
    <p class="card-sub" id="ovSchedSub"></p>
   </article>
   <article class="liquid-glass card">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-shield-cloud"/></svg></div><h2>Cloud watchdog</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/shield-cloud.webp" srcset="/assets/icons/raster/shield-cloud-64.png 64w, /assets/icons/raster/shield-cloud-128.png 128w, /assets/icons/raster/shield-cloud-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Cloud watchdog</h2></div>
    <div class="card-value sm" id="ovWatchValue">Online</div>
    <p class="card-sub" id="ovWatchSub"></p>
   </article>
   <article class="liquid-glass card ov-api">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-database"/></svg></div><h2>Pipeline API</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/database.webp" srcset="/assets/icons/raster/database-64.png 64w, /assets/icons/raster/database-128.png 128w, /assets/icons/raster/database-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Pipeline API</h2></div>
    <p class="card-sub" id="ovApiSub" style="margin-top:0"></p>
    <div class="api-state"><div class="card-value sm" id="ovApiValue">Online</div><div class="state-chip" id="ovApiChip"><i></i>In sync</div></div>
   </article>
  </div>
  <footer class="strip" aria-label="Status definitions">
-  <div class="strip-item" style="--light:var(--iris-green)"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-check-circle"/></svg></div><div><h3><i></i>Verified</h3><p>All systems operational</p></div></div>
-  <div class="strip-item" style="--light:var(--iris-orange)"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-info"/></svg></div><div><h3><i></i>Observe</h3><p>Degraded performance</p></div></div>
-  <div class="strip-item" style="--light:var(--iris-red)"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-bell"/></svg></div><div><h3><i></i>Action needed</h3><p>Immediate attention required</p></div></div>
+  <div class="strip-item" style="--light:var(--iris-green)"><div class="icon-tile"><img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Verified</h3><p>All systems operational</p></div></div>
+  <div class="strip-item" style="--light:var(--iris-orange)"><div class="icon-tile"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Observe</h3><p>Degraded performance</p></div></div>
+  <div class="strip-item" style="--light:var(--iris-red)"><div class="icon-tile"><img src="/assets/icons/raster/bell.webp" srcset="/assets/icons/raster/bell-64.png 64w, /assets/icons/raster/bell-128.png 128w, /assets/icons/raster/bell-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Action needed</h3><p>Immediate attention required</p></div></div>
  </footer>
 </section>
 
@@ -327,24 +339,24 @@ h1 em{font-style:italic;font-weight:400}
  </header>
  <div class="bento sys-grid">
   <article class="liquid-glass liquid-glass--primary card sys-google">
-   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-link"/></svg></div><h2>Google Workspace</h2></div>
+   <div class="card-head"><div class="icon-tile"><img src="/assets/icons/raster/link.webp" srcset="/assets/icons/raster/link-64.png 64w, /assets/icons/raster/link-128.png 128w, /assets/icons/raster/link-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Google Workspace</h2></div>
    <div class="card-value sm" id="sysGoogleValue">Connected</div>
    <p class="card-sub" id="sysGoogleSub"></p>
    <div class="svc-list" id="svcList"></div>
-   <div class="card-foot" id="sysGoogleFoot"><svg width="17" height="17" aria-hidden="true"><use href="#i-refresh"/></svg><span id="sysGoogleFootText">OAuth refresh succeeded</span></div>
+   <div class="card-foot" id="sysGoogleFoot"><img src="/assets/icons/raster/refresh.webp" srcset="/assets/icons/raster/refresh-64.png 64w, /assets/icons/raster/refresh-128.png 128w, /assets/icons/raster/refresh-256.png 256w" sizes="34px" alt="" aria-hidden="true"><span id="sysGoogleFootText">OAuth refresh succeeded</span></div>
   </article>
   <article class="liquid-glass card">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-database"/></svg></div><h2>Pipeline API</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/database.webp" srcset="/assets/icons/raster/database-64.png 64w, /assets/icons/raster/database-128.png 128w, /assets/icons/raster/database-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Pipeline API</h2></div>
    <div class="card-value sm" id="sysApiValue">Online</div>
    <p class="card-sub" id="sysApiSub"></p>
   </article>
   <article class="liquid-glass card">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-clock-poll"/></svg></div><h2>Scheduler heartbeat</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/clock-poll.webp" srcset="/assets/icons/raster/clock-poll-64.png 64w, /assets/icons/raster/clock-poll-128.png 128w, /assets/icons/raster/clock-poll-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Scheduler heartbeat</h2></div>
    <div class="card-value sm" id="sysSchedValue">Every minute</div>
    <p class="card-sub" id="sysSchedSub"></p>
   </article>
   <article class="liquid-glass card sys-watch">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-shield-cloud"/></svg></div><h2>Independent cloud watchdog</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/shield-cloud.webp" srcset="/assets/icons/raster/shield-cloud-64.png 64w, /assets/icons/raster/shield-cloud-128.png 128w, /assets/icons/raster/shield-cloud-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Independent cloud watchdog</h2></div>
    <p class="card-sub" id="sysWatchSub" style="margin-top:0"></p>
    <div class="api-state"><div class="card-value sm" id="sysWatchValue">Online</div><div class="state-chip" id="sysWatchChip"><i></i>Self-healing active</div></div>
   </article>
@@ -365,16 +377,16 @@ h1 em{font-style:italic;font-weight:400}
  <div class="ed-reassure" id="edReassure"><span class="pill-dot"></span><span id="edReassureText"></span></div>
  <div class="bento ed-grid">
   <article class="liquid-glass liquid-glass--primary card">
-   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-doc"/></svg></div><h2>Edition workflow</h2></div>
+   <div class="card-head"><div class="icon-tile"><img src="/assets/icons/raster/doc.webp" srcset="/assets/icons/raster/doc-64.png 64w, /assets/icons/raster/doc-128.png 128w, /assets/icons/raster/doc-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Edition workflow</h2></div>
    <div class="timeline" id="edTimeline"></div>
   </article>
   <article class="liquid-glass card">
-   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-info"/></svg></div><h2>What to know</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>What to know</h2></div>
    <div class="info-list">
-    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-doc-spark"/></svg></div><div><h3>Expected source</h3><p id="edSource">—</p></div></div>
-    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-clock-poll"/></svg></div><div><h3>Polling</h3><p id="edPolling">—</p></div></div>
-    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-plane"/></svg></div><div><h3>Delivery</h3><p id="edDelivery">—</p></div></div>
-    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-bell"/></svg></div><div><h3>Alerts</h3><p id="edAlerts">—</p></div></div>
+    <div class="info-row"><div class="icon-tile"><img src="/assets/icons/raster/doc-spark.webp" srcset="/assets/icons/raster/doc-spark-64.png 64w, /assets/icons/raster/doc-spark-128.png 128w, /assets/icons/raster/doc-spark-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3>Expected source</h3><p id="edSource">—</p></div></div>
+    <div class="info-row"><div class="icon-tile"><img src="/assets/icons/raster/clock-poll.webp" srcset="/assets/icons/raster/clock-poll-64.png 64w, /assets/icons/raster/clock-poll-128.png 128w, /assets/icons/raster/clock-poll-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3>Polling</h3><p id="edPolling">—</p></div></div>
+    <div class="info-row"><div class="icon-tile"><img src="/assets/icons/raster/plane.webp" srcset="/assets/icons/raster/plane-64.png 64w, /assets/icons/raster/plane-128.png 128w, /assets/icons/raster/plane-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3>Delivery</h3><p id="edDelivery">—</p></div></div>
+    <div class="info-row"><div class="icon-tile"><img src="/assets/icons/raster/bell.webp" srcset="/assets/icons/raster/bell-64.png 64w, /assets/icons/raster/bell-128.png 128w, /assets/icons/raster/bell-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3>Alerts</h3><p id="edAlerts">—</p></div></div>
    </div>
   </article>
  </div>
@@ -394,9 +406,9 @@ h1 em{font-style:italic;font-weight:400}
  </header>
  <div class="bento ah-grid">
   <article class="liquid-glass liquid-glass--primary card ah-main">
-   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-arrow-ahead"/></svg></div><h2>What requires attention now?</h2></div>
+   <div class="card-head"><div class="icon-tile"><img src="/assets/icons/raster/arrow-ahead.webp" srcset="/assets/icons/raster/arrow-ahead-64.png 64w, /assets/icons/raster/arrow-ahead-128.png 128w, /assets/icons/raster/arrow-ahead-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>What requires attention now?</h2></div>
    <div class="ah-attention" id="ahAttention">
-    <div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-info" id="ahAttIcon"/></svg></div>
+    <div class="icon-tile sm"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true" id="ahAttIcon"></div>
     <div><h3 id="ahAttTitle">—</h3><p id="ahAttDetail">—</p></div>
    </div>
    <div class="ah-reassure" id="ahReassure">
@@ -406,17 +418,17 @@ h1 em{font-style:italic;font-weight:400}
   </article>
   <div class="ah-side">
    <article class="liquid-glass card">
-    <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-refresh"/></svg></div><h2>Google token refresh</h2></div>
+    <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/refresh.webp" srcset="/assets/icons/raster/refresh-64.png 64w, /assets/icons/raster/refresh-128.png 128w, /assets/icons/raster/refresh-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Google token refresh</h2></div>
     <div class="state-chip" id="ahTokenChip"><i></i><span id="ahTokenState">Live refresh succeeded</span></div>
     <p class="card-sub" id="ahTokenSub"></p>
    </article>
    <article class="liquid-glass card">
-    <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-clock-key"/></svg></div><h2>Credential timing</h2></div>
+    <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/clock-key.webp" srcset="/assets/icons/raster/clock-key-64.png 64w, /assets/icons/raster/clock-key-128.png 128w, /assets/icons/raster/clock-key-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Credential timing</h2></div>
     <div class="state-chip" id="ahTimingChip"><i></i><span id="ahTimingState">Evidence-based</span></div>
     <p class="card-sub" id="ahTimingSub"></p>
    </article>
    <article class="liquid-glass card">
-    <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-shield-heal"/></svg></div><h2>Self-healing coverage</h2></div>
+    <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/shield-heal.webp" srcset="/assets/icons/raster/shield-heal-64.png 64w, /assets/icons/raster/shield-heal-128.png 128w, /assets/icons/raster/shield-heal-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Self-healing coverage</h2></div>
     <div class="state-chip" id="ahHealChip"><i></i><span id="ahHealState">Active</span></div>
     <p class="card-sub" id="ahHealSub"></p>
    </article>
@@ -481,8 +493,8 @@ function render(d){
  txt('sysSub',worst==='green'?'Four independent signals confirm IRIS is healthy.':verified+' of 4 signals verified. Live detail below.');
  txt('sysGoogleValue',val(g,'Connected','Degraded','Fault'));setLight($('sysGoogleValue'),g.light);txt('sysGoogleSub',g.detail);
  const svc=$('svcList');svc.replaceChildren();
- if(g.light==='green'){['Gmail','Drive','Contacts'].forEach(n=>{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<svg aria-hidden="true"><use href="#i-check-circle"/></svg><span>${n}</span><span class="svc-state"><span class="pill-dot" style="--light:var(--iris-green)"></span>Verified</span>`;svc.append(r)})}
- else{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<svg aria-hidden="true" style="color:var(--iris-orange)"><use href="#i-info"/></svg><span>Live connector check</span><span class="svc-state">${g.light==='orange'?'Degraded':'Not verified'}</span>`;svc.append(r)}
+ if(g.light==='green'){['Gmail','Drive','Contacts'].forEach(n=>{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true"><span>${n}</span><span class="svc-state"><span class="pill-dot" style="--light:var(--iris-green)"></span>Verified</span>`;svc.append(r)})}
+ else{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"><span>Live connector check</span><span class="svc-state">${g.light==='orange'?'Degraded':'Not verified'}</span>`;svc.append(r)}
  txt('sysGoogleFootText',g.light==='green'?'OAuth refresh succeeded':'OAuth refresh not verified');
  txt('sysApiValue',val(a,'Online','Degraded','Down'));setLight($('sysApiValue'),a.light);txt('sysApiSub',a.detail);
  txt('sysSchedValue',val(s,'Every minute','Delayed','Stale'));setLight($('sysSchedValue'),s.light);txt('sysSchedSub',s.detail);

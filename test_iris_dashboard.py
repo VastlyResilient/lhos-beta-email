@@ -53,10 +53,17 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertNotIn('Today AI',DASHBOARD_HTML)
   self.assertNotIn('Flexo',DASHBOARD_HTML)
   self.assertNotIn('lucide',DASHBOARD_HTML.lower())
- def test_v2_custom_icon_sprite(self):
-  for icon in ('iris-eye','pulse','layers','doc','arrow-ahead','check-circle','database','link','clock','shield-cloud','doc-spark','clock-poll','plane','bell','refresh','clock-key','shield-heal','info'):
-   self.assertIn(f'id="i-{icon}"',DASHBOARD_HTML)
-  self.assertIn('stroke-linecap="round"',DASHBOARD_HTML)
+ def test_v2_raster_icons_wired(self):
+  from pathlib import Path as _P
+  names=['iris-eye','pulse','layers','doc','arrow-ahead','check-circle','database','link','clock','shield-cloud','doc-spark','clock-poll','plane','bell','refresh','clock-key','shield-heal','info']
+  for name in names:
+   self.assertIn(f'/assets/icons/raster/{name}.webp',DASHBOARD_HTML,name)
+   for suffix in ('.webp','.png','-64.png','-128.png','-256.png'):
+    f=_P('/Users/bobby/lhos-beta-email/assets/icons/raster')/(name+suffix)
+    self.assertTrue(f.exists() and f.stat().st_size>500,str(f))
+  self.assertNotIn('<use href="#i-',DASHBOARD_HTML)
+  self.assertIn('object-fit:contain',DASHBOARD_HTML)
+  self.assertIn('/assets/icons/raster/iris-eye-64.png',DASHBOARD_HTML)
  def test_v2_truthful_status_logic(self):
   self.assertIn("green:['Everything is<br>operating normally'",DASHBOARD_HTML)
   self.assertIn("' of 4 verified'",DASHBOARD_HTML)
