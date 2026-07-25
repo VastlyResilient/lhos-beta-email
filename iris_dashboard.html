@@ -4,144 +4,516 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#0a0a0a">
-<title>IRIS — Live Health & Edition Status</title>
-<link href="https://db.onlinewebfonts.com/c/4556933d6966c60eda45bebad34d9c90?family=Flexo+Soft+Medium" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%230a0a0a'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%2368e0b1'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#020711">
+<title>IRIS Health · LifeHouse OS</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23020711'/%3E%3Ccircle cx='32' cy='32' r='13' fill='none' stroke='%2363cfff' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%2358e6a2'/%3E%3C/svg%3E">
 <style>
-:root{--bg:#0a0a0a;--white:#fff;--muted:rgba(255,255,255,.68);--faint:rgba(255,255,255,.42);--line:rgba(255,255,255,.22);--green:#68e0b1;--orange:#f0b861;--red:#ff767d;--light:var(--green);--page-x:clamp(20px,3.34vw,48px);--shadow:0 2px 18px rgba(0,0,0,.78)}
-*{box-sizing:border-box}html{scroll-behavior:smooth;background:var(--bg)}body{margin:0;background:var(--bg);color:#fff;font-family:'Flexo Soft Medium',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}::selection{background-color:rgba(255,255,255,.2)}button,a{font:inherit}button{color:inherit}.site{position:relative;z-index:1}.scroll-video{position:fixed;inset:0;z-index:0;background:#0a0a0a;overflow:hidden}.scroll-video video,.scroll-video canvas{position:absolute;inset:0;width:100%;height:100%}.scroll-video video{object-fit:cover;opacity:1;transition:opacity .65s ease}.scroll-video video.frames-ready{opacity:0}.scroll-video canvas{opacity:0;transition:opacity .65s ease}.scroll-video canvas.is-ready{opacity:1}.video-contrast{position:absolute;inset:0;background:rgba(0,0,0,.2)}.video-contrast:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 45%,rgba(0,0,0,.12)),linear-gradient(0deg,rgba(0,0,0,.28),transparent 34%,rgba(0,0,0,.12));pointer-events:none}
-.fixed-brand{position:fixed;left:var(--page-x);top:clamp(20px,2vw,28px);z-index:50;text-shadow:var(--shadow)}.wordmark{display:inline-block;color:#fff;text-decoration:none;font-size:clamp(18px,1.7vw,24px);font-weight:500;letter-spacing:-.03em}.version{margin-top:24px;font-size:clamp(10px,.85vw,12px);color:rgba(255,255,255,.6);letter-spacing:.04em}.corner-nav{position:fixed;right:var(--page-x);top:clamp(20px,2vw,28px);z-index:50;text-align:right;text-shadow:var(--shadow)}.corner-nav ul{display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin:0;padding:0;list-style:none}.nav-link{display:flex;min-height:24px;align-items:center;gap:4px;color:rgba(255,255,255,.8);text-decoration:none;font-size:clamp(12px,1vw,14px);transition:color .3s ease}.nav-link:hover,.nav-link:focus-visible{color:#fff}.nav-link svg{width:14px;height:14px;transition:transform .3s ease}.nav-link:hover svg,.nav-link:focus-visible svg{transform:translate(2px,-2px)}:focus-visible{outline:1px solid rgba(255,255,255,.9);outline-offset:4px}
-.screen{position:relative;display:flex;min-height:100vh;min-height:100svh;padding:clamp(128px,15vh,168px) var(--page-x) clamp(64px,8vh,84px);text-shadow:var(--shadow)}.screen.bottom{flex-direction:column;justify-content:flex-end}.screen.center{align-items:center}.spacer{height:80vh}.content-row{display:flex;width:100%;align-items:flex-end;justify-content:space-between;gap:clamp(32px,7vw,100px)}.section-heading{margin:0;max-width:760px;font-size:clamp(44px,6.2vw,92px);font-weight:500;line-height:1.02;letter-spacing:-.045em;text-transform:uppercase}.section-heading.compact{max-width:590px;font-size:clamp(42px,5.2vw,76px)}.line{display:block}.indent-1{padding-left:clamp(24px,4vw,64px)}.indent-2{padding-left:clamp(40px,7vw,112px)}.indent-3{padding-left:clamp(64px,10vw,160px)}.soft{font-weight:300;font-style:italic;text-transform:none}.slash{font-weight:400}.info-column{display:flex;width:100%;max-width:330px;flex-direction:column;align-items:flex-start}.chapter{display:flex;width:100%;align-items:center;justify-content:space-between;margin-bottom:28px}.chapter-mark{font-size:18px}.chapter-count{font-size:12px;color:rgba(255,255,255,.7)}.status-name{display:flex;align-items:center;gap:9px;margin-bottom:12px;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.status-dot{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 20px color-mix(in srgb,var(--light) 70%,transparent)}.summary{margin:0 0 28px;font-size:14px;line-height:1.65;color:rgba(255,255,255,.86)}.pill{display:flex;min-height:46px;width:100%;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.62);border-radius:999px;background:transparent;color:#fff;text-decoration:none;text-transform:uppercase;font-size:11px;letter-spacing:.15em;cursor:pointer;transition:background .3s ease,color .3s ease}.pill:hover,.pill:focus-visible{background:#fff;color:#000}.corner-action{position:absolute;bottom:clamp(20px,2vw,28px);left:var(--page-x);display:grid;width:44px;height:44px;place-items:center;border:0;background:transparent;color:rgba(255,255,255,.8);cursor:pointer}.corner-action:hover{color:#fff}.corner-action svg,.down svg{width:18px;height:18px}.down{position:absolute;bottom:clamp(20px,2vw,28px);left:50%;transform:translateX(-50%);color:rgba(255,255,255,.8);animation:bounce 1.4s infinite}.down-link{display:grid;width:44px;height:44px;place-items:center;color:inherit}@keyframes bounce{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,8px)}}
-[data-reveal]{opacity:0;transform:translateY(32px);transition:opacity .7s ease-out,transform .7s ease-out;transition-delay:var(--delay,0ms);will-change:transform,opacity}[data-reveal].is-visible{opacity:1;transform:translateY(0)}
-.section-stack{display:flex;width:100%;flex-direction:column;gap:clamp(36px,6vh,64px)}.middle-row{display:flex;align-items:center;justify-content:space-between;gap:48px}.section-side{display:flex;min-width:250px;align-items:center;justify-content:space-between;gap:clamp(32px,7vw,96px)}.section-description{max-width:350px;margin:0;color:rgba(255,255,255,.82);font-size:14px;line-height:1.65}.systems-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(0,0,0,.08)}.system-item{min-height:164px;padding:22px 24px;border-right:1px solid var(--line);backdrop-filter:blur(2px)}.system-item:last-child{border-right:0}.item-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:34px;color:rgba(255,255,255,.62);font-size:10px;letter-spacing:.1em;text-transform:uppercase}.item-title{margin:0 0 10px;font-size:15px;font-weight:500}.item-detail{margin:0;color:rgba(255,255,255,.7);font-size:12px;line-height:1.55}
-.edition-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.54fr);gap:clamp(36px,7vw,100px);width:100%;align-items:end}.edition-copy{max-width:520px}.edition-label{display:flex;align-items:center;gap:10px;margin:0 0 18px;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.edition-detail{margin:0;color:rgba(255,255,255,.84);font-size:14px;line-height:1.65}.edition-meta{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}.meta{padding:15px 0;border-bottom:1px solid var(--line)}.meta:nth-child(odd){padding-right:22px}.meta:nth-child(even){padding-left:22px;border-left:1px solid var(--line)}.meta-label{display:block;margin-bottom:6px;color:rgba(255,255,255,.5);font-size:9px;letter-spacing:.13em;text-transform:uppercase}.meta-value{font-size:12px}.edition-timeline{display:grid;grid-template-columns:repeat(4,1fr);position:relative;margin-top:34px}.edition-timeline:before{content:"";position:absolute;left:6%;right:6%;top:9px;height:1px;background:var(--line)}.timeline-step{position:relative}.timeline-mark{position:relative;z-index:1;width:19px;height:19px;margin-bottom:11px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(10,10,10,.75)}.timeline-step.done .timeline-mark{border-color:var(--green);background:var(--green)}.timeline-step.current .timeline-mark{border-color:var(--light);box-shadow:0 0 0 4px color-mix(in srgb,var(--light) 20%,transparent)}.timeline-name{font-size:11px;color:rgba(255,255,255,.68)}
-.awareness-layout{display:grid;grid-template-columns:minmax(280px,.62fr) minmax(0,1.38fr);gap:clamp(44px,8vw,120px);width:100%;align-items:end}.awareness-list{border-top:1px solid var(--line)}.awareness-item{display:grid;grid-template-columns:16px minmax(170px,.75fr) minmax(0,1.25fr);gap:18px;padding:19px 0;border-bottom:1px solid var(--line);align-items:start}.awareness-item .status-dot{margin-top:4px}.awareness-title{margin:0;font-size:13px;font-weight:500}.awareness-detail{margin:0;color:rgba(255,255,255,.7);font-size:12px;line-height:1.55}.policy-row{display:flex;flex-wrap:wrap;gap:10px 24px;margin-top:22px;color:rgba(255,255,255,.62);font-size:10px;letter-spacing:.06em;text-transform:uppercase}.page-foot{position:absolute;right:var(--page-x);bottom:clamp(20px,2vw,28px);color:rgba(255,255,255,.5);font-size:10px}.error-banner{position:fixed;left:50%;bottom:24px;z-index:80;max-width:min(560px,calc(100% - 40px));transform:translateX(-50%);border:1px solid rgba(255,118,125,.55);border-radius:999px;background:rgba(10,10,10,.92);padding:12px 22px;color:#ffd2d4;font-size:12px;box-shadow:0 12px 48px rgba(0,0,0,.45)}
-@media(max-width:800px){.screen{padding-top:142px}.content-row,.middle-row,.edition-layout,.awareness-layout{flex-direction:column;display:flex;align-items:flex-start}.info-column{max-width:340px}.systems-list{grid-template-columns:1fr 1fr}.system-item:nth-child(2){border-right:0}.system-item:nth-child(-n+2){border-bottom:1px solid var(--line)}.section-side{width:100%;max-width:340px}.edition-copy{max-width:560px}.awareness-layout{align-self:stretch;width:100%}.awareness-layout>div,.awareness-list{width:100%;min-width:0}.page-foot{position:static;margin-top:30px}.screen.center{align-items:flex-end}.section-stack{justify-content:flex-end;min-height:calc(100svh - 210px)}}
-@media(max-width:639px){.fixed-brand{left:20px;top:20px}.corner-nav{right:20px;top:20px}.version{margin-top:20px}.screen{padding:128px 20px 68px}.spacer{height:56vh}.content-row{gap:40px}.section-heading{font-size:clamp(40px,12vw,52px)}.section-heading.compact{font-size:clamp(38px,11vw,48px)}.indent-1{padding-left:22px}.indent-2{padding-left:38px}.indent-3{padding-left:58px}.info-column{max-width:100%}.chapter{margin-bottom:20px}.systems-list{grid-template-columns:1fr}.system-item{min-height:136px;border-right:0;border-bottom:1px solid var(--line)!important;padding:20px}.system-item:last-child{border-bottom:0!important}.item-top{margin-bottom:24px}.section-stack{gap:34px}.section-side{max-width:100%}.edition-layout{gap:34px}.edition-meta{width:100%}.edition-timeline{margin-top:28px}.timeline-name{font-size:10px}.awareness-item{grid-template-columns:14px 1fr;padding:18px 0}.awareness-detail{grid-column:2}.policy-row{line-height:1.5}.corner-action{left:12px}.page-foot{font-size:9px}.video-contrast{background:rgba(0,0,0,.3)}}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}[data-reveal]{opacity:1;transform:none;transition:none}.down{animation:none}.scroll-video video,.scroll-video canvas{transition:none}}
+:root{
+ --iris-bg:#020711;--iris-surface:rgba(8,17,31,.58);--iris-surface-strong:rgba(7,15,29,.76);--iris-surface-soft:rgba(16,31,52,.42);
+ --iris-border:rgba(194,229,255,.24);--iris-border-strong:rgba(187,230,255,.42);--iris-highlight:rgba(255,255,255,.36);
+ --iris-text:#f7f9fc;--iris-text-secondary:rgba(226,233,242,.72);--iris-text-muted:rgba(210,222,235,.52);
+ --iris-cyan:#63cfff;--iris-blue:#388cff;--iris-green:#58e6a2;--iris-orange:#ff9b31;--iris-red:#ff555f;
+ --iris-radius-sm:14px;--iris-radius-md:20px;--iris-radius-lg:26px;--iris-radius-xl:32px;--iris-blur:28px;
+ --iris-card-shadow:0 24px 70px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.15),inset 0 -1px 0 rgba(95,181,255,.08);
+ --light:var(--iris-green);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--iris-bg)}
+body{background:var(--iris-bg);color:var(--iris-text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
+::selection{background:rgba(99,207,255,.28)}
+a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--iris-cyan);outline-offset:3px;border-radius:8px}
+
+/* ---------- wallpaper ---------- */
+.wallpaper{position:fixed;inset:0;z-index:-3;background:var(--iris-bg)}
+.wallpaper div{position:absolute;inset:0;background-position:center;background-repeat:no-repeat;background-size:cover;opacity:0;transition:opacity .5s ease}
+.wallpaper div.on{opacity:1}
+.wp-overview{background-image:url('/assets/wallpaper-overview.webp')}
+.wp-systems{background-image:url('/assets/wallpaper-systems.webp')}
+.wp-edition{background-image:url('/assets/wallpaper-edition.webp')}
+.wp-ahead{background-image:url('/assets/wallpaper-ahead.webp')}
+.scrim{position:fixed;inset:0;z-index:-2;pointer-events:none;background:linear-gradient(180deg,rgba(2,7,17,.34),rgba(2,7,17,.16) 34%,rgba(2,7,17,.2) 70%,rgba(2,7,17,.42));}
+
+/* ---------- liquid glass primitives ---------- */
+.liquid-glass{position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(145deg,rgba(32,57,88,.34),rgba(6,13,26,.62) 55%,rgba(8,18,34,.72));border:1px solid var(--iris-border);border-radius:var(--iris-radius-lg);box-shadow:var(--iris-card-shadow);-webkit-backdrop-filter:blur(var(--iris-blur)) saturate(145%) brightness(76%);backdrop-filter:blur(var(--iris-blur)) saturate(145%) brightness(76%)}
+.liquid-glass::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(135deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,.045) 24%,transparent 48%);border-radius:inherit}
+.liquid-glass::after{content:"";position:absolute;inset:-1px;z-index:-2;pointer-events:none;border-radius:inherit;background:radial-gradient(circle at 12% 0%,rgba(98,207,255,.15),transparent 34%)}
+.liquid-glass--primary{background:linear-gradient(145deg,rgba(39,70,111,.46),rgba(8,17,32,.74) 62%);border-color:var(--iris-border-strong);box-shadow:0 28px 90px rgba(0,0,0,.44),0 0 0 1px rgba(79,183,255,.06),inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(80,177,255,.1)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.liquid-glass{background:rgba(5,12,24,.94)}}
+.glass-pill{display:inline-flex;align-items:center;gap:9px;padding:11px 20px;border-radius:999px;background:var(--iris-surface-soft);border:1px solid var(--iris-border);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);font-size:13px;letter-spacing:.02em;color:var(--iris-text-secondary);white-space:nowrap}
+.icon-tile{display:grid;place-items:center;width:56px;height:56px;flex:none;border-radius:18px;background:linear-gradient(145deg,rgba(115,191,255,.2),rgba(13,25,43,.46));border:1px solid rgba(199,231,255,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 10px 28px rgba(0,0,0,.22);color:#eaf6ff}
+.icon-tile svg{width:26px;height:26px;filter:drop-shadow(0 0 6px rgba(99,207,255,.35))}
+.icon-tile.sm{width:44px;height:44px;border-radius:14px}.icon-tile.sm svg{width:22px;height:22px}
+
+/* ---------- rail ---------- */
+.rail{position:fixed;left:32px;top:44px;bottom:48px;width:118px;z-index:50;display:flex;flex-direction:column;align-items:center;padding:24px 10px;border-radius:30px}
+.rail-logo{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px}
+.rail-logo .mark{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 34% 30%,rgba(115,191,255,.32),rgba(13,25,43,.5) 70%);border:1px solid rgba(199,231,255,.28);box-shadow:0 0 22px rgba(99,207,255,.22),inset 0 1px 0 rgba(255,255,255,.2);color:#eaf6ff}
+.rail-logo .mark svg{width:27px;height:27px;filter:drop-shadow(0 0 7px rgba(99,207,255,.5))}
+.rail-logo span{font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--iris-text)}
+.rail-nav{display:flex;flex-direction:column;justify-content:space-evenly;flex:1;width:100%;margin:6px 0}
+.rail-item{display:flex;flex-direction:column;align-items:center;gap:7px;width:100%;min-height:44px;padding:11px 4px;border-radius:20px;color:var(--iris-text-muted);font-size:11.5px;letter-spacing:.04em;transition:transform 180ms ease,border-color 180ms ease,background-color 180ms ease,box-shadow 180ms ease,color 180ms ease;border:1px solid transparent}
+.rail-item svg{width:22px;height:22px}
+.rail-item:hover{color:var(--iris-text);transform:translateY(-1px)}
+.rail-item[aria-current="page"]{color:var(--iris-text);background:linear-gradient(150deg,rgba(115,191,255,.24),rgba(13,25,43,.5));border-color:rgba(159,216,255,.4);box-shadow:0 0 20px rgba(99,207,255,.18),inset 0 1px 0 rgba(255,255,255,.18)}
+.rail-live{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.12em;color:var(--iris-text-secondary);padding:9px 14px;border-radius:999px;border:1px solid var(--iris-border);background:var(--iris-surface-soft)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--light);box-shadow:0 0 10px var(--light)}
+.rail-live .live-dot{animation:breathe 2.6s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ---------- mobile topbar ---------- */
+.topbar{display:none}
+
+/* ---------- layout ---------- */
+.shell{position:relative;margin-left:224px;padding:56px 48px 40px 0;max-width:1544px;min-height:100vh;display:flex;flex-direction:column}
+section.page{display:none;flex:1;flex-direction:column;gap:24px}
+section.page.on{display:flex}
+
+/* ---------- headers ---------- */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;padding:6px 4px 2px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--iris-text-muted);margin-bottom:16px}
+h1{font-size:60px;font-weight:500;line-height:1.05;letter-spacing:-.02em;text-shadow:0 2px 26px rgba(0,0,0,.6)}
+h1 em{font-style:italic;font-weight:400}
+.head-sub{margin-top:16px;font-size:16.5px;color:var(--iris-text-secondary);max-width:560px}
+.pill-dot{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 10px var(--light)}
+
+/* ---------- cards ---------- */
+.bento{display:grid;gap:20px}
+.card{padding:26px 28px;display:flex;flex-direction:column;border-radius:var(--iris-radius-lg);transition:transform 180ms ease,border-color 180ms ease,box-shadow 180ms ease}
+.card:hover{transform:translateY(-2px);border-color:var(--iris-border-strong)}
+.card-head{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.card-head h2{font-size:19px;font-weight:550;letter-spacing:-.01em}
+.card-value{font-size:42px;font-weight:500;letter-spacing:-.02em;line-height:1.08}
+.card-value.sm{font-size:30px}
+.card-sub{margin-top:8px;font-size:14.5px;line-height:1.5;color:var(--iris-text-secondary)}
+.card-foot{margin-top:auto;padding-top:18px;display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--iris-text-secondary)}
+.state-chip{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--iris-text-secondary)}
+.state-chip i{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 9px var(--light);font-style:normal}
+
+/* overview grid */
+.ov-grid{grid-template-columns:minmax(300px,1.05fr) repeat(3,1fr)}
+.ov-health{grid-row:span 2;align-items:flex-start}
+.ov-health .card-value{font-size:52px}
+.ov-api{grid-column:2/5;flex-direction:row;align-items:center;gap:20px}
+.ov-api .card-head{margin-bottom:0;flex:1}
+.ov-api .api-state{margin-left:auto;text-align:right}
+.ring-wrap{position:relative;width:132px;height:132px;margin:14px 0 20px;display:grid;place-items:center}
+.ring-wrap svg.ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.ring-wrap .ring-bg{fill:none;stroke:rgba(199,231,255,.14);stroke-width:5}
+.ring-wrap .ring-fg{fill:none;stroke:var(--light);stroke-width:5;stroke-linecap:round;stroke-dasharray:364.4;stroke-dashoffset:24;filter:drop-shadow(0 0 8px var(--light))}
+.ring-wrap.live .ring-fg{animation:ringbreathe 3s ease-in-out infinite}
+@keyframes ringbreathe{0%,100%{stroke-dashoffset:24;opacity:1}50%{stroke-dashoffset:38;opacity:.75}}
+.ring-wrap .icon-tile{width:72px;height:72px;border-radius:50%}
+.ring-wrap .icon-tile svg{width:34px;height:34px}
+
+/* status definition strip */
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding:20px 26px;border-radius:var(--iris-radius-lg)}
+.strip-item{display:flex;align-items:flex-start;gap:14px}
+.strip-item .icon-tile{width:42px;height:42px;border-radius:13px}.strip-item .icon-tile svg{width:20px;height:20px}
+.strip-item h3{font-size:14.5px;font-weight:550;display:flex;align-items:center;gap:8px}
+.strip-item p{margin-top:4px;font-size:12.5px;color:var(--iris-text-muted)}
+.strip-item h3 i{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 8px var(--light);font-style:normal}
+.mini-strip{display:flex;align-items:center;justify-content:center;gap:12px;padding:17px 24px;font-size:14px;color:var(--iris-text-secondary);border-radius:var(--iris-radius-lg)}
+.mini-strip b{color:var(--iris-text);font-weight:550}
+
+/* systems grid */
+.sys-grid{grid-template-columns:1.25fr 1fr 1fr;grid-template-rows:auto auto auto}
+.sys-google{grid-row:span 2}
+.sys-watch{grid-column:1/4;flex-direction:row;align-items:center;gap:20px}
+.sys-watch .card-head{margin-bottom:0;flex:1}
+.svc-list{display:flex;flex-direction:column;gap:12px;margin:6px 0 4px}
+.svc-row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:var(--iris-radius-sm);background:rgba(10,22,40,.42);border:1px solid rgba(194,229,255,.14);font-size:14.5px}
+.svc-row svg{width:19px;height:19px;color:var(--iris-green)}
+.svc-row .svc-state{margin-left:auto;font-size:12.5px;color:var(--iris-text-secondary);display:flex;align-items:center;gap:7px}
+
+/* edition grid */
+.ed-grid{grid-template-columns:1.35fr 1fr}
+.ed-reassure{display:flex;align-items:center;gap:12px;padding:15px 22px;font-size:16px;color:var(--iris-text);border-radius:var(--iris-radius-md)}
+.ed-reassure .pill-dot{flex:none}
+.timeline{display:flex;flex-direction:column;margin-top:8px}
+.tl-step{display:grid;grid-template-columns:56px 1fr;gap:18px;position:relative;padding:15px 0}
+.tl-step:not(:last-child)::before{content:"";position:absolute;left:27px;top:64px;bottom:-8px;width:1.5px;background:linear-gradient(180deg,rgba(159,216,255,.35),rgba(159,216,255,.08))}
+.tl-num{display:grid;place-items:center;width:56px;height:56px;border-radius:50%;font-size:18px;font-weight:550;background:linear-gradient(145deg,rgba(115,191,255,.18),rgba(13,25,43,.5));border:1px solid rgba(199,231,255,.22);color:var(--iris-text)}
+.tl-step.current .tl-num{border-color:var(--light);box-shadow:0 0 16px color-mix(in srgb,var(--light) 35%,transparent)}
+.tl-step h3{font-size:17px;font-weight:550}
+.tl-state{margin-top:5px;font-size:13.5px;display:flex;align-items:center;gap:8px;color:var(--iris-text-secondary)}
+.tl-state i{width:7px;height:7px;border-radius:50%;background:var(--light);box-shadow:0 0 8px var(--light);font-style:normal}
+.tl-step.pending{opacity:.62}
+.info-list{display:flex;flex-direction:column;gap:6px}
+.info-row{display:flex;align-items:center;gap:15px;padding:15px 4px;border-bottom:1px solid rgba(194,229,255,.12)}
+.info-row:last-child{border-bottom:0}
+.info-row .icon-tile{width:44px;height:44px;border-radius:14px}.info-row .icon-tile svg{width:21px;height:21px}
+.info-row h3{font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--iris-text-muted);font-weight:550}
+.info-row p{margin-top:4px;font-size:15px;color:var(--iris-text)}
+
+/* ahead grid */
+.ah-grid{grid-template-columns:1.2fr 1fr}
+.ah-main{grid-row:span 3}
+.ah-attention{display:flex;align-items:center;gap:14px;padding:18px 20px;margin:18px 0;border-radius:var(--iris-radius-md);background:rgba(10,22,40,.45);border:1px solid rgba(194,229,255,.16)}
+.ah-attention h3{font-size:16.5px;font-weight:550;display:flex;align-items:center;gap:9px}
+.ah-attention p{margin-top:5px;font-size:13.5px;color:var(--iris-text-secondary)}
+.ah-reassure{margin-top:auto;padding-top:20px;border-top:1px solid rgba(194,229,255,.12)}
+.ah-reassure h4{font-size:15px;font-weight:550;display:flex;align-items:center;gap:9px}
+.ah-reassure p{margin-top:6px;font-size:13.5px;color:var(--iris-text-secondary)}
+.ah-side{display:flex;flex-direction:column;gap:20px}
+.ah-side .card{padding:22px 24px}
+.ah-side .card-head{margin-bottom:12px}
+.ah-side .card-head h2{font-size:16.5px}
+.ah-defs{grid-column:1/3;display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr;gap:22px;padding:26px 28px}
+.ah-defs h2{font-size:19px;font-weight:550;margin-bottom:10px}
+.ah-defs .intro p{font-size:13.5px;line-height:1.55;color:var(--iris-text-secondary)}
+.def-col h3{font-size:14.5px;font-weight:550;display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.def-col h3 i{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 8px var(--light);font-style:normal}
+.def-col p{font-size:12.5px;line-height:1.55;color:var(--iris-text-muted)}
+
+.error-banner{position:fixed;left:50%;bottom:24px;z-index:80;transform:translateX(-50%);padding:12px 22px;border-radius:999px;background:rgba(7,13,25,.94);border:1px solid rgba(255,85,95,.5);color:#ffd7d9;font-size:13px}
+
+/* ---------- responsive ---------- */
+@media(max-width:1180px){
+ .shell{margin-left:196px;padding-right:34px}
+ h1{font-size:48px}
+ .ov-grid{grid-template-columns:1fr 1fr}
+ .ov-health{grid-row:auto;grid-column:span 2;flex-direction:row;align-items:center;gap:26px}
+ .ov-api{grid-column:span 2}
+ .sys-grid{grid-template-columns:1fr 1fr}
+ .sys-google{grid-row:span 2}
+ .sys-watch{grid-column:span 2}
+ .ed-grid,.ah-grid{grid-template-columns:1fr}
+ .ah-main{grid-row:auto}
+ .ah-defs{grid-column:auto;grid-template-columns:1fr 1fr}
+}
+@media(max-width:760px){
+ .rail{display:none}
+ .topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:10px;margin:0 -16px;padding:12px 16px;background:rgba(3,9,19,.72);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-bottom:1px solid rgba(194,229,255,.14)}
+ .topbar .mark{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle at 34% 30%,rgba(115,191,255,.32),rgba(13,25,43,.5) 70%);border:1px solid rgba(199,231,255,.28);color:#eaf6ff;flex:none}
+ .topbar .mark svg{width:20px;height:20px}
+ .topbar nav{display:flex;gap:4px;flex:1;overflow-x:auto;scrollbar-width:none}
+ .topbar nav::-webkit-scrollbar{display:none}
+ .topbar .rail-item{flex-direction:row;gap:6px;padding:9px 13px;font-size:12px;border-radius:999px;white-space:nowrap}
+ .topbar .rail-item svg{width:16px;height:16px}
+ .topbar .rail-live{padding:7px 11px;font-size:10px}
+ .shell{margin:0;padding:14px 16px 96px;max-width:none}
+ .page-head{flex-direction:column;align-items:flex-start;gap:16px}
+ h1{font-size:36px}
+ .card-value{font-size:32px}
+ .ov-health{flex-direction:column;align-items:flex-start}
+ .bento,.strip,.ah-defs{grid-template-columns:1fr}
+ .ov-api,.sys-watch{flex-direction:column;align-items:flex-start}
+ .ov-api .api-state{margin-left:0;text-align:left}
+ .strip{gap:14px}
+ .ed-grid{grid-template-columns:1fr}
+ .card{padding:22px 20px}
+ .tl-step{grid-template-columns:46px 1fr}
+ .tl-num{width:46px;height:46px;font-size:16px}
+ .tl-step:not(:last-child)::before{left:22px}
+}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{animation:none!important;transition:none!important}
+}
 </style>
 </head>
 <body>
-<div id="scrollVideo" class="scroll-video" aria-hidden="true">
-  <video id="fallbackVideo" muted playsinline preload="auto" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4"></video>
-  <canvas id="videoCanvas"></canvas>
-  <div class="video-contrast"></div>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><symbol id="i-iris-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 12C5.9 7.2 9.4 5 12 5s6.1 2.2 9.2 7c-3.1 4.8-6.6 7-9.2 7s-6.1-2.2-9.2-7Z"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></symbol><symbol id="i-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4.4L10 6.8l3.8 10.4L16.2 12H21"/></symbol><symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6 20.8 8 12 12.4 3.2 8 12 3.6Z"/><path d="m4.6 12 7.4 3.7L19.4 12"/><path d="m4.6 15.6 7.4 3.7 7.4-3.7"/></symbol><symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.8h7.2l4.6 4.6v11.8H6.5V3.8Z"/><path d="M13.7 3.8v4.6h4.6"/><path d="M9.4 12.2h5.8M9.4 15.4h4.2"/></symbol><symbol id="i-arrow-ahead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M5.5 15.5c4.8 0 9-2.1 11-6"/><path d="m13.2 8.6 3.6-.8.8 3.6"/></symbol><symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="m8.2 12.4 2.7 2.7 5-5.4"/></symbol><symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.4" rx="7.6" ry="2.9"/><path d="M4.4 6.4v11.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V6.4"/><path d="M4.4 12c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9"/></symbol><symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.5-2.5a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"/><path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.5 2.5a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"/></symbol><symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.4V12l3.2 2"/></symbol><symbol id="i-shield-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 19 6v5.3c0 4.3-2.9 7.4-7 8.9-4.1-1.5-7-4.6-7-8.9V6l7-2.6Z"/><path d="M9.2 13.6a1.9 1.9 0 0 1 .5-3.7 2.5 2.5 0 0 1 4.8.6 1.7 1.7 0 0 1-.4 3.1H9.2Z"/></symbol><symbol id="i-doc-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4.8h6.4l4.1 4.1v6.3"/><path d="M11.9 4.8v4.1H16"/><path d="M5.5 4.8v14.4h7.2"/><path d="m17.6 14.8.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></symbol><symbol id="i-clock-poll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.8 12a7.8 7.8 0 1 1-2.3-5.5"/><path d="M19.9 3.6v3.4h-3.4"/><path d="M12 8.4V12l2.7 1.7"/></symbol><symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 3.6 10.6 13.8"/><path d="M20.8 3.6 14.3 20.4l-3.7-6.6L4 10.1 20.8 3.6Z"/></symbol><symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.2a5.3 5.3 0 0 1 5.3 5.3c0 3.8 1.4 5.2 1.4 5.2H5.3s1.4-1.4 1.4-5.2A5.3 5.3 0 0 1 12 4.2Z"/><path d="M10.2 18.2a1.9 1.9 0 0 0 3.6 0"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.2A8.4 8.4 0 0 0 5.7 6.5"/><path d="M20 3.6v4.6h-4.6"/><path d="M4 15.8a8.4 8.4 0 0 0 14.3 1.7"/><path d="M4 20.4v-4.6h4.6"/></symbol><symbol id="i-clock-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.6" cy="10.6" r="6.8"/><path d="M10.6 7.2v3.4l2.3 1.4"/><path d="m15.4 15.4 4.4 4.4M18.4 18.4l1.4-1.4M16.6 16.6l1.2-1.2"/></symbol><symbol id="i-shield-heal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 19 6v5.3c0 4.3-2.9 7.4-7 8.9-4.1-1.5-7-4.6-7-8.9V6l7-2.6Z"/><path d="M14.9 10.4a3.3 3.3 0 1 0 .4 3.2"/><path d="M15.4 8.6v2h-2"/></symbol><symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v4.6"/><circle cx="12" cy="8" r="0.7" fill="currentColor" stroke="none"/></symbol></svg>
+<div class="wallpaper" aria-hidden="true">
+ <div class="wp-overview on" data-wp="overview"></div>
+ <div class="wp-systems" data-wp="systems"></div>
+ <div class="wp-edition" data-wp="edition"></div>
+ <div class="wp-ahead" data-wp="ahead"></div>
 </div>
-<div class="site">
-  <header>
-    <div class="fixed-brand">
-      <div data-reveal style="--delay:0ms"><a class="wordmark" href="#overview">(IRIS_OS)</a></div>
-      <div class="version" data-reveal style="--delay:150ms">[ LIVE / ET ]</div>
-    </div>
-    <nav class="corner-nav" aria-label="Dashboard sections">
-      <ul>
-        <li data-reveal style="--delay:100ms"><a class="nav-link" href="#overview">overview <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
-        <li data-reveal style="--delay:220ms"><a class="nav-link" href="#systems">systems <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
-        <li data-reveal style="--delay:340ms"><a class="nav-link" href="#edition">edition <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
-        <li data-reveal style="--delay:460ms"><a class="nav-link" href="#awareness">ahead <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a></li>
-      </ul>
-    </nav>
-  </header>
-  <main>
-    <section id="overview" class="screen bottom">
-      <div class="content-row">
-        <h1 class="section-heading" aria-label="Live IRIS health status">
-          <span class="line indent-1" data-reveal style="--delay:100ms"><span data-hero-line="0">IRIS</span></span>
-          <span class="line" data-reveal style="--delay:220ms"><span data-hero-line="1">LIVE</span></span>
-          <span class="line indent-2 slash" data-reveal style="--delay:340ms"><span data-hero-line="2">// HEALTH</span></span>
-          <span class="line indent-3" data-reveal style="--delay:460ms"><span data-hero-line="3">STATUS</span></span>
-        </h1>
-        <div class="info-column">
-          <div class="chapter" data-reveal style="--delay:400ms"><span class="chapter-mark">( A )</span><span class="chapter-count">[ 001 /004 ]</span></div>
-          <div id="overviewStatus" class="status-name" data-reveal style="--delay:500ms"><span class="status-dot"></span><span>Reading live signals</span></div>
-          <p id="overviewDetail" class="summary" data-reveal style="--delay:580ms">Checking the protected pipeline without guessing.</p>
-          <button id="refreshStatus" class="pill" type="button" aria-label="Refresh live IRIS status" data-reveal style="--delay:680ms">Refresh status</button>
-        </div>
-      </div>
-      <button id="copyStatus" class="corner-action" type="button" aria-label="Copy current IRIS status" data-reveal style="--delay:760ms"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></button>
-      <div class="down" data-reveal style="--delay:760ms"><a class="down-link" href="#systems" aria-label="Scroll to core systems"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></a></div>
-    </section>
-    <div class="spacer" aria-hidden="true"></div>
-    <section id="systems" class="screen center">
-      <div class="section-stack">
-        <div class="middle-row">
-          <h2 class="section-heading compact"><span class="line" data-reveal style="--delay:100ms">Core</span><span class="line indent-1" data-reveal style="--delay:220ms">Systems</span></h2>
-          <div class="section-side" data-reveal style="--delay:340ms"><span class="chapter-mark">( B )</span><span class="chapter-count">[ 002 /004 ]</span></div>
-        </div>
-        <p class="section-description" data-reveal style="--delay:400ms">Each light is backed by a live signal. Orange means observe. Red is reserved for a verified fault or stale heartbeat.</p>
-        <div id="systemsList" class="systems-list" aria-live="polite"></div>
-      </div>
-      <div class="down" data-reveal style="--delay:700ms"><a class="down-link" href="#edition" aria-label="Scroll to today’s edition"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></a></div>
-    </section>
-    <div class="spacer" aria-hidden="true"></div>
-    <section id="edition" class="screen center">
-      <div class="section-stack">
-        <div class="middle-row">
-          <h2 class="section-heading compact"><span class="line" data-reveal style="--delay:100ms">Today’s</span><span class="line indent-1" data-reveal style="--delay:220ms">Edition</span></h2>
-          <div class="section-side" data-reveal style="--delay:340ms"><span class="chapter-mark">( C )</span><span class="chapter-count">[ 003 /004 ]</span></div>
-        </div>
-        <div class="edition-layout">
-          <div class="edition-copy" data-reveal style="--delay:420ms">
-            <div id="editionStatus" class="edition-label"><span class="status-dot"></span><span>Reading edition state</span></div>
-            <p id="editionDetail" class="edition-detail">Today’s content, review, approval, and delivery state are evaluated separately from system health.</p>
-            <div id="editionTimeline" class="edition-timeline"></div>
-          </div>
-          <div class="edition-meta" data-reveal style="--delay:520ms">
-            <div class="meta"><span class="meta-label">Source</span><span id="source" class="meta-value">—</span></div>
-            <div class="meta"><span class="meta-label">Polling window</span><span id="window" class="meta-value">—</span></div>
-            <div class="meta"><span class="meta-label">Approval</span><span id="sendPolicy" class="meta-value">—</span></div>
-            <div class="meta"><span class="meta-label">Alerts</span><span id="alerts" class="meta-value">—</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="down" data-reveal style="--delay:700ms"><a class="down-link" href="#awareness" aria-label="Scroll to advance awareness"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></a></div>
-    </section>
-    <div class="spacer" aria-hidden="true"></div>
-    <section id="awareness" class="screen center">
-      <div class="awareness-layout">
-        <div>
-          <h2 class="section-heading compact"><span class="line" data-reveal style="--delay:100ms">See <span class="soft">ahead</span></span><span class="line indent-1" data-reveal style="--delay:220ms">Clearly</span></h2>
-          <div class="section-side" data-reveal style="--delay:340ms"><span class="chapter-mark">( D )</span><span class="chapter-count">[ 004 /004 ]</span></div>
-          <p class="section-description" data-reveal style="--delay:420ms">No invented expiry dates. No manufactured urgency. IRIS asks for attention only when live evidence warrants it.</p>
-          <div id="policyRow" class="policy-row" data-reveal style="--delay:500ms"></div>
-        </div>
-        <div id="awarenessList" class="awareness-list" aria-live="polite"></div>
-      </div>
-      <button class="corner-action" type="button" aria-label="Copy current IRIS status" data-copy-status data-reveal style="--delay:700ms"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></button>
-      <div class="page-foot">Private · read-only · America/New_York · auto-refresh 30s</div>
-    </section>
-  </main>
-  <div id="error" class="error-banner" role="status" hidden></div>
+<div class="scrim" aria-hidden="true"></div>
+
+<aside class="rail liquid-glass" aria-label="IRIS Health navigation">
+ <div class="rail-logo">
+  <div class="mark"><svg aria-hidden="true"><use href="#i-iris-eye"/></svg></div>
+  <span>IRIS</span>
+ </div>
+ <nav class="rail-nav" aria-label="Dashboard sections">
+  <a class="rail-item" href="#overview" data-nav="overview" aria-current="page" aria-label="Overview — live IRIS health"><svg aria-hidden="true"><use href="#i-pulse"/></svg>Overview</a>
+  <a class="rail-item" href="#systems" data-nav="systems" aria-label="Core systems status"><svg aria-hidden="true"><use href="#i-layers"/></svg>Systems</a>
+  <a class="rail-item" href="#edition" data-nav="edition" aria-label="Today’s edition workflow"><svg aria-hidden="true"><use href="#i-doc"/></svg>Edition</a>
+  <a class="rail-item" href="#ahead" data-nav="ahead" aria-label="Advance awareness"><svg aria-hidden="true"><use href="#i-arrow-ahead"/></svg>Ahead</a>
+ </nav>
+ <div class="rail-live"><span class="live-dot" id="railLiveDot"></span>LIVE</div>
+</aside>
+
+<header class="topbar">
+ <div class="mark"><svg aria-hidden="true"><use href="#i-iris-eye"/></svg></div>
+ <nav aria-label="Dashboard sections">
+  <a class="rail-item" href="#overview" data-nav="overview" aria-current="page">Overview</a>
+  <a class="rail-item" href="#systems" data-nav="systems">Systems</a>
+  <a class="rail-item" href="#edition" data-nav="edition">Edition</a>
+  <a class="rail-item" href="#ahead" data-nav="ahead">Ahead</a>
+ </nav>
+ <div class="rail-live"><span class="live-dot" id="topLiveDot"></span>LIVE</div>
+</header>
+
+<div class="shell">
+<main id="app">
+
+<!-- ================= OVERVIEW ================= -->
+<section class="page on" id="page-overview" data-section="overview" aria-labelledby="ovTitle">
+ <header class="page-head">
+  <div>
+   <div class="eyebrow">IRIS Health / Live</div>
+   <h1 id="ovTitle">Everything is<br>operating normally</h1>
+   <p class="head-sub" id="ovSub">IRIS is healthy. No manual repair is needed.</p>
+  </div>
+  <div class="glass-pill" id="ovPill"><span class="pill-dot"></span><span id="ovPillText">Connecting</span></div>
+ </header>
+ <div class="bento ov-grid">
+  <article class="liquid-glass liquid-glass--primary card ov-health">
+   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-pulse"/></svg></div><h2>Overall health</h2></div>
+   <div class="ring-wrap" id="ovRing">
+    <svg class="ring" viewBox="0 0 132 132" aria-hidden="true"><circle class="ring-bg" cx="66" cy="66" r="58"/><circle class="ring-fg" id="ovRingFg" cx="66" cy="66" r="58"/></svg>
+    <div class="icon-tile"><svg aria-hidden="true"><use href="#i-check-circle" id="ovRingIcon"/></svg></div>
+   </div>
+   <div class="card-value" id="ovHealthValue">Healthy</div>
+   <p class="card-sub" id="ovHealthSub">All systems operational</p>
+  </article>
+  <article class="liquid-glass card">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-link"/></svg></div><h2>Google connection</h2></div>
+   <div class="card-value sm" id="ovGoogleValue">Connected</div>
+   <p class="card-sub" id="ovGoogleSub"></p>
+  </article>
+  <article class="liquid-glass card">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-clock"/></svg></div><h2>Scheduler</h2></div>
+   <div class="card-value sm" id="ovSchedValue">Every minute</div>
+   <p class="card-sub" id="ovSchedSub"></p>
+  </article>
+  <article class="liquid-glass card">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-shield-cloud"/></svg></div><h2>Cloud watchdog</h2></div>
+   <div class="card-value sm" id="ovWatchValue">Online</div>
+   <p class="card-sub" id="ovWatchSub"></p>
+  </article>
+  <article class="liquid-glass card ov-api">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-database"/></svg></div><h2>Pipeline API</h2></div>
+   <p class="card-sub" id="ovApiSub" style="margin-top:0"></p>
+   <div class="api-state"><div class="card-value sm" id="ovApiValue">Online</div><div class="state-chip" id="ovApiChip"><i></i>In sync</div></div>
+  </article>
+ </div>
+ <footer class="liquid-glass strip" aria-label="Status definitions">
+  <div class="strip-item" style="--light:var(--iris-green)"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-check-circle"/></svg></div><div><h3><i></i>Verified</h3><p>All systems operational</p></div></div>
+  <div class="strip-item" style="--light:var(--iris-orange)"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-info"/></svg></div><div><h3><i></i>Observe</h3><p>Degraded performance</p></div></div>
+  <div class="strip-item" style="--light:var(--iris-red)"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-bell"/></svg></div><div><h3><i></i>Action needed</h3><p>Immediate attention required</p></div></div>
+ </footer>
+</section>
+
+<!-- ================= SYSTEMS ================= -->
+<section class="page" id="page-systems" data-section="systems" aria-labelledby="sysTitle">
+ <header class="page-head">
+  <div>
+   <div class="eyebrow">Infrastructure / Live</div>
+   <h1 id="sysTitle">Core systems</h1>
+   <p class="head-sub" id="sysSub">Four independent signals confirm IRIS is healthy.</p>
+  </div>
+  <div class="glass-pill" id="sysPill"><span class="pill-dot"></span><span id="sysPillText">—</span></div>
+ </header>
+ <div class="bento sys-grid">
+  <article class="liquid-glass liquid-glass--primary card sys-google">
+   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-link"/></svg></div><h2>Google Workspace</h2></div>
+   <div class="card-value sm" id="sysGoogleValue">Connected</div>
+   <p class="card-sub" id="sysGoogleSub"></p>
+   <div class="svc-list" id="svcList"></div>
+   <div class="card-foot" id="sysGoogleFoot"><svg width="17" height="17" aria-hidden="true"><use href="#i-refresh"/></svg><span id="sysGoogleFootText">OAuth refresh succeeded</span></div>
+  </article>
+  <article class="liquid-glass card">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-database"/></svg></div><h2>Pipeline API</h2></div>
+   <div class="card-value sm" id="sysApiValue">Online</div>
+   <p class="card-sub" id="sysApiSub"></p>
+  </article>
+  <article class="liquid-glass card">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-clock-poll"/></svg></div><h2>Scheduler heartbeat</h2></div>
+   <div class="card-value sm" id="sysSchedValue">Every minute</div>
+   <p class="card-sub" id="sysSchedSub"></p>
+  </article>
+  <article class="liquid-glass card sys-watch">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-shield-cloud"/></svg></div><h2>Independent cloud watchdog</h2></div>
+   <p class="card-sub" id="sysWatchSub" style="margin-top:0"></p>
+   <div class="api-state"><div class="card-value sm" id="sysWatchValue">Online</div><div class="state-chip" id="sysWatchChip"><i></i>Self-healing active</div></div>
+  </article>
+ </div>
+ <footer class="liquid-glass mini-strip"><span class="pill-dot" id="sysStripDot"></span><span id="sysStripText">Self-healing coverage active &nbsp;•&nbsp; Manual repair needed: <b>No</b></span></footer>
+</section>
+
+<!-- ================= EDITION ================= -->
+<section class="page" id="page-edition" data-section="edition" aria-labelledby="edTitle">
+ <header class="page-head">
+  <div>
+   <div class="eyebrow">Edition workflow / Live</div>
+   <h1 id="edTitle">Today’s edition</h1>
+  </div>
+  <div class="glass-pill" id="edPill"><span class="pill-dot"></span><span id="edPillText">—</span></div>
+ </header>
+ <div class="liquid-glass ed-reassure" id="edReassure"><span class="pill-dot"></span><span id="edReassureText"></span></div>
+ <div class="bento ed-grid">
+  <article class="liquid-glass liquid-glass--primary card">
+   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-doc"/></svg></div><h2>Edition workflow</h2></div>
+   <div class="timeline" id="edTimeline"></div>
+  </article>
+  <article class="liquid-glass card">
+   <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-info"/></svg></div><h2>What to know</h2></div>
+   <div class="info-list">
+    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-doc-spark"/></svg></div><div><h3>Expected source</h3><p id="edSource">—</p></div></div>
+    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-clock-poll"/></svg></div><div><h3>Polling</h3><p id="edPolling">—</p></div></div>
+    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-plane"/></svg></div><div><h3>Delivery</h3><p id="edDelivery">—</p></div></div>
+    <div class="info-row"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-bell"/></svg></div><div><h3>Alerts</h3><p id="edAlerts">—</p></div></div>
+   </div>
+  </article>
+ </div>
+ <footer class="liquid-glass mini-strip"><span class="pill-dot" id="edStripDot"></span><span id="edStripText">Self-healing is watching &nbsp;•&nbsp; Manual repair needed: <b>No</b></span></footer>
+</section>
+
+<!-- ================= AHEAD ================= -->
+<section class="page" id="page-ahead" data-section="ahead" aria-labelledby="ahTitle">
+ <header class="page-head">
+  <div>
+   <div class="eyebrow">Advance awareness / Live</div>
+   <h1 id="ahTitle">See <em>ahead</em> clearly</h1>
+   <p class="head-sub">Live evidence. Calm escalation. No invented deadlines.</p>
+  </div>
+  <div class="glass-pill" id="ahPill"><span class="pill-dot"></span><span id="ahPillText">—</span></div>
+ </header>
+ <div class="bento ah-grid">
+  <article class="liquid-glass liquid-glass--primary card ah-main">
+   <div class="card-head"><div class="icon-tile"><svg aria-hidden="true"><use href="#i-arrow-ahead"/></svg></div><h2>What requires attention now?</h2></div>
+   <div class="ah-attention" id="ahAttention">
+    <div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-info" id="ahAttIcon"/></svg></div>
+    <div><h3 id="ahAttTitle">—</h3><p id="ahAttDetail">—</p></div>
+   </div>
+   <div class="ah-reassure" id="ahReassure">
+    <h4 id="ahReassureTitle"><span class="pill-dot"></span>No system repair needed</h4>
+    <p id="ahReassureDetail">All monitored systems are operating normally.</p>
+   </div>
+  </article>
+  <div class="ah-side">
+   <article class="liquid-glass card">
+    <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-refresh"/></svg></div><h2>Google token refresh</h2></div>
+    <div class="state-chip" id="ahTokenChip"><i></i><span id="ahTokenState">Live refresh succeeded</span></div>
+    <p class="card-sub" id="ahTokenSub"></p>
+   </article>
+   <article class="liquid-glass card">
+    <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-clock-key"/></svg></div><h2>Credential timing</h2></div>
+    <div class="state-chip" id="ahTimingChip"><i></i><span id="ahTimingState">Evidence-based</span></div>
+    <p class="card-sub" id="ahTimingSub"></p>
+   </article>
+   <article class="liquid-glass card">
+    <div class="card-head"><div class="icon-tile sm"><svg aria-hidden="true"><use href="#i-shield-heal"/></svg></div><h2>Self-healing coverage</h2></div>
+    <div class="state-chip" id="ahHealChip"><i></i><span id="ahHealState">Active</span></div>
+    <p class="card-sub" id="ahHealSub"></p>
+   </article>
+  </div>
+  <footer class="liquid-glass ah-defs">
+   <div class="intro"><h2>How we determine status</h2><p>IRIS relies on live signals and verified evidence. Status reflects what’s real—never what’s assumed.</p></div>
+   <div class="def-col" style="--light:var(--iris-green)"><h3><i></i>Verified working</h3><p>Live checks confirm normal operation and healthy coverage.</p></div>
+   <div class="def-col" style="--light:var(--iris-orange)"><h3><i></i>Observe or expected input</h3><p>Awaiting source availability or external action we can’t force.</p></div>
+   <div class="def-col" style="--light:var(--iris-red)"><h3><i></i>Confirmed failure or stale heartbeat</h3><p>Live signals confirm impact or missing heartbeat beyond threshold.</p></div>
+  </footer>
+ </div>
+</section>
+
+</main>
 </div>
+<div class="error-banner" id="error" role="status" hidden></div>
+
 <script>
-const VIDEO_URL='https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4';
-const COLORS={green:'#68e0b1',orange:'#f0b861',red:'#ff767d'},NAMES={green:'verified',orange:'observe',red:'attention'};let currentSnapshot=null;
-const byId=id=>document.getElementById(id),setText=(id,value)=>{const el=byId(id);if(el)el.textContent=value??'—'};
-function applyLight(el,light){if(el)el.style.setProperty('--light',COLORS[light]||COLORS.red)}
-function make(tag,className,text){const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el}
-function render(snapshot){currentSnapshot=snapshot;const overall=snapshot.overall,light=overall.light;document.documentElement.dataset.health=light;document.documentElement.style.setProperty('--light',COLORS[light]||COLORS.red);
- const heroLines=light==='green'?['IRIS','IS','// HEALTHY','NOW']:light==='orange'?['IRIS','IS','// WATCHING','NOW']:['IRIS','NEEDS','// ATTENTION','NOW'];document.querySelectorAll('[data-hero-line]').forEach((el,i)=>el.textContent=heroLines[i]);
- const overview=byId('overviewStatus');applyLight(overview,light);overview.querySelector('span:last-child').textContent=NAMES[light];setText('overviewDetail',overall.detail+' Checked '+new Date(snapshot.generated_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})+' ET.');
- const systems=byId('systemsList');systems.replaceChildren();['api','google','scheduler','watchdog'].forEach((key,index)=>{const x=snapshot.systems[key],article=make('article','system-item');article.dataset.reveal='';article.style.setProperty('--delay',(100+index*110)+'ms');applyLight(article,x.light);const top=make('div','item-top');const state=make('span','');state.append(make('span','status-dot'),document.createTextNode(' '+NAMES[x.light]));top.append(state,make('span','',String(index+1).padStart(2,'0')));article.append(top,make('h3','item-title',x.label),make('p','item-detail',x.detail));systems.append(article);revealObserver.observe(article)});
- const e=snapshot.edition,editionStatus=byId('editionStatus');applyLight(editionStatus,e.light);editionStatus.querySelector('span:last-child').textContent=e.label;setText('editionDetail',e.detail);setText('source',e.source);setText('window',e.window);setText('sendPolicy',snapshot.policy.send_policy);setText('alerts',snapshot.policy.alerts+' · iMessage '+snapshot.policy.imessage.toLowerCase());
- const timeline=byId('editionTimeline');timeline.replaceChildren();e.steps.forEach(step=>{const item=make('div','timeline-step '+step.state);applyLight(item,e.light);item.append(make('div','timeline-mark'),make('div','timeline-name',step.label));timeline.append(item)});
- const awareness=byId('awarenessList');awareness.replaceChildren();snapshot.awareness.forEach((x,index)=>{const item=make('article','awareness-item');item.dataset.reveal='';item.style.setProperty('--delay',(100+index*100)+'ms');applyLight(item,x.light);item.append(make('span','status-dot'),make('h3','awareness-title',x.label),make('p','awareness-detail',x.detail));awareness.append(item);revealObserver.observe(item)});
- const policy=byId('policyRow');policy.replaceChildren();[['cutoff',snapshot.policy.cutoff],['send',snapshot.policy.send_policy],['alerts',snapshot.policy.alerts],['iMessage',snapshot.policy.imessage]].forEach(([k,v])=>policy.append(make('span','',k+' · '+v)));byId('error').hidden=true}
-async function loadStatus(){const button=byId('refreshStatus');button.disabled=true;button.textContent='Refreshing…';try{const response=await fetch('/api/iris-health',{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw new Error('Health API returned '+response.status);render(await response.json())}catch(error){const banner=byId('error');banner.hidden=false;banner.textContent='Live status could not be refreshed: '+error.message}finally{button.disabled=false;button.textContent='Refresh status'}}
-async function copyStatus(event){if(!currentSnapshot)return;const s=currentSnapshot,text=`IRIS — ${s.overall.label}. ${s.overall.detail} Today: ${s.edition.label}.`;try{await navigator.clipboard.writeText(text);const el=event.currentTarget,old=el.getAttribute('aria-label');el.setAttribute('aria-label','IRIS status copied');setTimeout(()=>el.setAttribute('aria-label',old),1600)}catch(_){}}
-byId('refreshStatus').addEventListener('click',loadStatus);byId('copyStatus').addEventListener('click',copyStatus);document.querySelectorAll('[data-copy-status]').forEach(el=>el.addEventListener('click',copyStatus));
-const revealObserver=new IntersectionObserver(entries=>entries.forEach(entry=>entry.target.classList.toggle('is-visible',entry.isIntersecting)),{threshold:.15});document.querySelectorAll('[data-reveal]').forEach(el=>revealObserver.observe(el));
-(function initScrollVideo(){const canvas=byId('videoCanvas'),fallback=byId('fallbackVideo'),ctx=canvas.getContext('2d',{alpha:false});let frames=[],objectUrl=null,frameVideo=null,cancelled=false,raf=0,lastIndex=-1,smoothed=0,fallbackDuration=0,fallbackSeeking=false;
- function clamp(value,min,max){return Math.min(max,Math.max(min,value))}function once(target,event){return new Promise((resolve,reject)=>{const done=()=>{cleanup();resolve()},fail=()=>{cleanup();reject(new Error('video '+event+' failed'))},cleanup=()=>{target.removeEventListener(event,done);target.removeEventListener('error',fail)};target.addEventListener(event,done,{once:true});target.addEventListener('error',fail,{once:true})})}
- function resizeCanvas(){const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),h=Math.max(1,Math.round(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;lastIndex=-1}}
- function drawCover(frame){const cw=canvas.width,ch=canvas.height,scale=Math.max(cw/frame.width,ch/frame.height),dw=frame.width*scale,dh=frame.height*scale;ctx.drawImage(frame,(cw-dw)/2,(ch-dh)/2,dw,dh)}
- function seek(video,time){if(Math.abs(video.currentTime-time)<.001)return Promise.resolve();video.currentTime=time;return once(video,'seeked')}
- async function extractFrames(){try{const response=await fetch(VIDEO_URL,{mode:'cors'});if(!response.ok)throw new Error('video fetch '+response.status);const blob=await response.blob();if(cancelled)return;objectUrl=URL.createObjectURL(blob);frameVideo=document.createElement('video');frameVideo.muted=true;frameVideo.playsInline=true;frameVideo.preload='auto';frameVideo.src=objectUrl;await once(frameVideo,'loadedmetadata');if(frameVideo.readyState<2)await once(frameVideo,'loadeddata');const duration=frameVideo.duration,count=Math.min(120,Math.max(30,Math.round(duration*24))),scale=Math.min(1,1280/frameVideo.videoWidth),width=Math.max(1,Math.round(frameVideo.videoWidth*scale)),height=Math.max(1,Math.round(frameVideo.videoHeight*scale)),end=Math.max(0,duration-.05);for(let i=0;i<count&&!cancelled;i++){await seek(frameVideo,(i/(count-1))*end);if(cancelled)break;frames.push(await createImageBitmap(frameVideo,{resizeWidth:width,resizeHeight:height,resizeQuality:'high'}))}if(cancelled)return;resizeCanvas();canvas.classList.add('is-ready');fallback.classList.add('frames-ready')}catch(error){console.info('IRIS frame extraction unavailable; using scrubbed video fallback.',error.message)}}
- fallback.addEventListener('loadedmetadata',()=>{fallbackDuration=fallback.duration||0});fallback.addEventListener('seeked',()=>{fallbackSeeking=false});window.addEventListener('resize',resizeCanvas,{passive:true});window.addEventListener('scroll',()=>{}, {passive:true});resizeCanvas();extractFrames();
- function tick(){const maxScroll=Math.max(1,document.documentElement.scrollHeight-window.innerHeight),target=clamp(window.scrollY/maxScroll,0,1);smoothed+=(target-smoothed)*.1;if(frames.length){const index=Math.min(frames.length-1,Math.round(smoothed*(frames.length-1)));if(index!==lastIndex){resizeCanvas();drawCover(frames[index]);lastIndex=index}}else if(fallbackDuration&&!fallbackSeeking){const targetTime=smoothed*Math.max(0,fallbackDuration-.05);if(Math.abs(fallback.currentTime-targetTime)>.001){fallbackSeeking=true;fallback.currentTime=targetTime}}raf=requestAnimationFrame(tick)}raf=requestAnimationFrame(tick);
- window.addEventListener('pagehide',()=>{cancelled=true;cancelAnimationFrame(raf);frames.forEach(frame=>frame.close());frames=[];if(frameVideo){frameVideo.removeAttribute('src');frameVideo.load()}if(objectUrl)URL.revokeObjectURL(objectUrl)},{once:true})})();
-loadStatus();setInterval(loadStatus,30000);
+const LIGHTS={green:'var(--iris-green)',orange:'var(--iris-orange)',red:'var(--iris-red)'};
+const SECTIONS=['overview','systems','edition','ahead'];
+let snap=null;
+const $=id=>document.getElementById(id);
+const setLight=(el,l)=>{if(el)el.style.setProperty('--light',LIGHTS[l]||LIGHTS.red)};
+const txt=(id,v)=>{const el=$(id);if(el)el.textContent=v??'—'};
+function timeET(iso){return new Date(iso).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})+' ET'}
+
+/* ---------- hash router ---------- */
+function route(){
+ let h=(location.hash||'#overview').replace('#','');
+ if(!SECTIONS.includes(h))h='overview';
+ document.querySelectorAll('section.page').forEach(s=>s.classList.toggle('on',s.dataset.section===h));
+ document.querySelectorAll('.wallpaper div').forEach(w=>w.classList.toggle('on',w.dataset.wp===h));
+ document.querySelectorAll('[data-nav]').forEach(a=>{const on=a.dataset.nav===h;if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+ window.scrollTo({top:0,behavior:'instant'});
+ const titles={overview:'Overview',systems:'Core Systems',edition:'Today’s Edition',ahead:'Advance Awareness'};
+ document.title=`IRIS Health · ${titles[h]}`;
+}
+window.addEventListener('hashchange',route);
+
+/* ---------- render ---------- */
+function render(d){
+ snap=d;const o=d.overall,L=o.light;
+ document.documentElement.style.setProperty('--light',LIGHTS[L]);
+ setLight($('railLiveDot'),L);setLight($('topLiveDot'),L);
+ const t=timeET(d.generated_at);
+ /* overview */
+ const heads={green:['Everything is<br>operating normally','IRIS is healthy. No manual repair is needed.'],orange:['Operating normally—<br>one thing to watch',o.detail],red:['Attention<br>required',o.detail]};
+ $('ovTitle').innerHTML=heads[L][0];txt('ovSub',heads[L][1]);
+ setLight($('ovPill'),L);txt('ovPillText',{green:'Verified',orange:'Watching',red:'Attention'}[L]+' · '+t);
+ setLight($('ovRing'),L);$('ovRing').classList.toggle('live',L==='green');
+ txt('ovHealthValue',{green:'Healthy',orange:'Observing',red:'Attention'}[L]);
+ txt('ovHealthSub',o.detail);
+ const g=d.systems.google,s=d.systems.scheduler,w=d.systems.watchdog,a=d.systems.api;
+ const val=(x,ok,mid,bad)=>x.light==='green'?ok:x.light==='orange'?mid:bad;
+ txt('ovGoogleValue',val(g,'Connected','Degraded','Fault'));txt('ovGoogleSub',g.detail);setLight($('ovGoogleValue'),g.light);
+ txt('ovSchedValue',val(s,'Every minute','Delayed','Stale'));txt('ovSchedSub',s.detail);setLight($('ovSchedValue'),s.light);
+ txt('ovWatchValue',val(w,'Online','Delayed','Stale'));txt('ovWatchSub',w.detail);setLight($('ovWatchValue'),w.light);
+ txt('ovApiValue',val(a,'Online','Degraded','Down'));txt('ovApiSub',a.detail);setLight($('ovApiChip'),a.light);
+ /* systems */
+ const all=[g,s,w,a],verified=all.filter(x=>x.light==='green').length,worst=all.some(x=>x.light==='red')?'red':all.some(x=>x.light==='orange')?'orange':'green';
+ setLight($('sysPill'),worst);txt('sysPillText',verified+' of 4 verified');
+ txt('sysSub',worst==='green'?'Four independent signals confirm IRIS is healthy.':verified+' of 4 signals verified. Live detail below.');
+ txt('sysGoogleValue',val(g,'Connected','Degraded','Fault'));setLight($('sysGoogleValue'),g.light);txt('sysGoogleSub',g.detail);
+ const svc=$('svcList');svc.replaceChildren();
+ if(g.light==='green'){['Gmail','Drive','Contacts'].forEach(n=>{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<svg aria-hidden="true"><use href="#i-check-circle"/></svg><span>${n}</span><span class="svc-state"><span class="pill-dot" style="--light:var(--iris-green)"></span>Verified</span>`;svc.append(r)})}
+ else{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<svg aria-hidden="true" style="color:var(--iris-orange)"><use href="#i-info"/></svg><span>Live connector check</span><span class="svc-state">${g.light==='orange'?'Degraded':'Not verified'}</span>`;svc.append(r)}
+ txt('sysGoogleFootText',g.light==='green'?'OAuth refresh succeeded':'OAuth refresh not verified');
+ txt('sysApiValue',val(a,'Online','Degraded','Down'));setLight($('sysApiValue'),a.light);txt('sysApiSub',a.detail);
+ txt('sysSchedValue',val(s,'Every minute','Delayed','Stale'));setLight($('sysSchedValue'),s.light);txt('sysSchedSub',s.detail);
+ txt('sysWatchValue',val(w,'Online','Delayed','Stale'));setLight($('sysWatchValue'),w.light);txt('sysWatchSub',w.detail);
+ setLight($('sysWatchChip'),w.light);$('sysWatchChip').lastChild.textContent=w.light==='green'?'Self-healing active':w.light==='orange'?'Self-healing delayed':'Self-healing unverified';
+ const repair=L==='red';
+ setLight($('sysStripDot'),L);$('sysStripText').innerHTML=(w.light==='green'?'Self-healing coverage active':'Self-healing coverage '+w.light)+' &nbsp;•&nbsp; Manual repair needed: <b>'+(repair?'Yes':'No')+'</b>';
+ /* edition */
+ const e=d.edition;
+ setLight($('edPill'),e.light);txt('edPillText',e.label);
+ const reassure=L==='green'
+  ?(e.light==='green'?`IRIS is healthy. Today’s edition is ${e.label.toLowerCase()}.`:`IRIS is healthy. Today’s edition is waiting for ${e.source}.`)
+  :o.label+'. '+o.detail;
+ setLight($('edReassure'),e.light);txt('edReassureText',reassure);
+ const stepText={done:'Complete',pending:'Not started'};
+ const currentText={content:e.light==='orange'?'Waiting for file':'Processing',review:'In review',approval:'Awaiting approval',delivery:'Sending'};
+ const tl=$('edTimeline');tl.replaceChildren();
+ e.steps.forEach((st,i)=>{const el=document.createElement('div');el.className='tl-step '+st.state;
+  const light=st.state==='done'?'green':st.state==='current'?e.light:'muted';
+  el.style.setProperty('--light',LIGHTS[light]||'rgba(210,222,235,.4)');
+  const label=st.state==='current'?currentText[st.key]:stepText[st.state];
+  el.setAttribute('aria-label',`Step ${i+1} ${st.label}: ${label}`);
+  el.innerHTML=`<div class="tl-num">${i+1}</div><div><h3>${st.label}</h3><div class="tl-state"><i></i>${label}</div></div>`;tl.append(el)});
+ txt('edSource',e.source);txt('edPolling','Every minute until '+d.policy.cutoff);txt('edDelivery',d.policy.send_policy);txt('edAlerts',d.policy.alerts+' · iMessage '+d.policy.imessage.toLowerCase());
+ setLight($('edStripDot'),L);$('edStripText').innerHTML='Self-healing is watching &nbsp;•&nbsp; Manual repair needed: <b>'+(repair?'Yes':'No')+'</b>';
+ /* ahead */
+ setLight($('ahPill'),L);txt('ahPillText',{green:'Verified',orange:'Watching',red:'Attention'}[L]+' · '+t);
+ const aw=d.awareness||[];
+ const find=(...keys)=>aw.find(x=>keys.some(k=>x.label.toLowerCase().includes(k)));
+ const attention=aw.filter(x=>x.light!=='green').sort((a,b)=>(a.light==='red'?0:1)-(b.light==='red'?0:1))[0];
+ const att=$('ahAttention');
+ if(attention){setLight(att,attention.light);txt('ahAttTitle',attention.label);txt('ahAttDetail',attention.detail)}
+ else{setLight(att,'green');txt('ahAttTitle','Nothing requires attention right now');txt('ahAttDetail','All monitored systems are operating normally.')}
+ const rs=$('ahReassure');setLight(rs,L);
+ txt('ahReassureTitle',L==='green'?'No system repair needed':o.label);
+ txt('ahReassureDetail',L==='green'?'All monitored systems are operating normally.':o.detail);
+ const token=find('token refresh','refresh is automatic'),timing=find('timing','evidence'),heal=find('self-healing','healing loop');
+ const fill=(item,chip,state,sub,okState)=>{const l=item?item.light:'green';setLight($(chip),l);txt(state,item?(l==='green'?okState:item.label):okState);txt(sub,item?item.detail:'')};
+ fill(token,'ahTokenChip','ahTokenState','ahTokenSub','Live refresh succeeded');
+ fill(timing,'ahTimingChip','ahTimingState','ahTimingSub','Evidence-based');
+ fill(heal,'ahHealChip','ahHealState','ahHealSub','Active');
+ $('error').hidden=true;
+}
+async function load(){
+ try{const r=await fetch('/api/iris-health',{cache:'no-store',credentials:'same-origin'});
+  if(!r.ok)throw new Error('Health API returned '+r.status);
+  render(await r.json());
+ }catch(err){const b=$('error');b.hidden=false;b.textContent='Live status could not be refreshed: '+err.message}
+}
+route();load();setInterval(load,30000);
 </script>
 </body>
 </html>

@@ -32,7 +32,7 @@ from typing import Optional
 import httpx
 from delivery import atomic_json_write, deliver_once
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
@@ -851,7 +851,7 @@ def _private_headers(response):
     response.headers["Referrer-Policy"]="no-referrer"
     response.headers["X-Frame-Options"]="DENY"
     response.headers["X-Content-Type-Options"]="nosniff"
-    response.headers["Content-Security-Policy"]="default-src 'self'; style-src 'unsafe-inline' https://db.onlinewebfonts.com; font-src https://db.onlinewebfonts.com data:; script-src 'unsafe-inline'; connect-src 'self' https://d8j0ntlcm91z4.cloudfront.net; media-src https://d8j0ntlcm91z4.cloudfront.net blob:; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    response.headers["Content-Security-Policy"]="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     return response
 
 def _google_dashboard_check():
@@ -887,6 +887,21 @@ async def iris_health_page(request:Request,token:str=""):
         return _private_headers(response)
     _require_dashboard(request)
     return _private_headers(HTMLResponse(DASHBOARD_HTML))
+
+ASSETS_DIR=(Path(__file__).resolve().parent/"assets").resolve()
+
+@app.get("/assets/{file_path:path}")
+def iris_assets(file_path:str):
+    target=(ASSETS_DIR/file_path).resolve()
+    if not str(target).startswith(str(ASSETS_DIR)+"/") or not target.is_file():
+        return JSONResponse({"error":"not found"},status_code=404)
+    if target.suffix.lower() not in {".webp",".png",".svg",".jpg",".jpeg",".avif"}:
+        return JSONResponse({"error":"not found"},status_code=404)
+    response=FileResponse(target)
+    response.headers["Cache-Control"]="public, max-age=86400, immutable"
+    response.headers["X-Robots-Tag"]="noindex, nofollow"
+    response.headers["X-Content-Type-Options"]="nosniff"
+    return response
 
 @app.get("/api/iris-health")
 async def iris_health_api(request:Request):
