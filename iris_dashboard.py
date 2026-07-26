@@ -39,7 +39,18 @@ def _item(light,label,detail,checked_at=None):
     return {"light":light,"label":label,"detail":detail,"checked_at":checked_at}
 
 
-def _overall(systems):
+def _overall(systems,now):
+    # Overnight, the daily pipeline is intentionally idle. Keep genuine core
+    # failures red, but do not promote a delayed hosted watchdog schedule into
+    # a false pipeline incident.
+    if now.hour<7:
+        core=(systems["api"],systems["google"],systems["scheduler"])
+        core_light=max((x["light"] for x in core),key=lambda x:SEVERITY[x])
+        if core_light=="green":
+            start=now.replace(hour=7,minute=0,second=0,microsecond=0)
+            item=_item("green","IRIS is idle · overnight monitoring","The daily pipeline is scheduled to start at 7:00 AM ET.")
+            item.update({"mode":"idle","next_start":start.isoformat()})
+            return item
     light=max((x["light"] for x in systems.values()),key=lambda x:SEVERITY[x])
     if light=="green":return _item("green","IRIS is healthy","Core services are responding and no manual action is needed.")
     if light=="orange":return _item("orange","IRIS is watching","Nothing is confirmed broken. One signal needs observation.")
@@ -69,6 +80,10 @@ def _watchdog(now,heartbeat):
     stamp=heartbeat.get("watchdog");age=_age_minutes(stamp,now)
     if age is None:return _item("orange","Awaiting cloud check evidence","The dashboard has not yet recorded a cloud-watchdog heartbeat. No failure is being inferred.")
     if age<=30:return _item("green","Cloud watchdog online",f"The independent watchdog checked in {_age_label(stamp,now)}.",stamp)
+    if now.hour<7 and age>90:
+        item=_item("orange","Overnight cloud check delayed",f"IRIS is idle. The last independent cloud check was {int(age)} minutes ago; core services are verified separately.",stamp)
+        item["mode"]="overnight"
+        return item
     if age<=90:return _item("orange","Cloud check is delayed",f"The last cloud check was {int(age)} minutes ago. Hosted schedules can drift; no outage is assumed.",stamp)
     return _item("red","Cloud watchdog is stale",f"No cloud-watchdog heartbeat has arrived for {int(age)} minutes.",stamp)
 
@@ -121,11 +136,12 @@ def build_snapshot(*,now,state,heartbeat,connectors,reports,alerts):
     if edition["stage"]=="hold":awareness.append(_item("orange","Today’s source is still pending",f"IRIS is looking for {edition['source']} every minute until 2:59 PM ET. No system repair is needed."))
     wd=systems["watchdog"]
     if wd["light"]=="green":awareness.append(_item("green","Self-healing loop is armed","The independent cloud watchdog is checking health. It repairs known n8n and Railway failures before escalating."))
+    elif wd.get("mode")=="overnight":awareness.append(_item("orange","Overnight monitoring continues","The daily pipeline is idle. A hosted cloud check is delayed, while the API and Google connection remain independently verified."))
     elif wd["light"]=="orange":awareness.append(_item("orange","Observe the next cloud check","No repair is requested yet. The dashboard will turn red only after the watchdog is genuinely stale."))
     else:awareness.append(_item("red","Cloud self-healing evidence is stale","The independent watchdog has not checked in within its safe window."))
     latest_report=None
     if reports:
         key=max(reports);r=reports.get(key) or {};latest_report={"date":key,"stage":r.get("stage"),"terminal":r.get("terminal"),"reported_at":r.get("reported_at")}
-    return {"generated_at":now.isoformat(),"timezone":"America/New_York","overall":_overall(systems),"systems":systems,"edition":edition,"awareness":awareness,"last_outcome":latest_report,"policy":{"cutoff":"3:00 PM ET","content_polling":"Every minute, 7:00 AM–2:59 PM ET","reply_polling":"Every minute, 7:00 AM–2:59 PM ET","send_policy":"Immediately after valid approval","alerts":"Bobby only","imessage":"Disabled"}}
+    return {"generated_at":now.isoformat(),"timezone":"America/New_York","overall":_overall(systems,now),"systems":systems,"edition":edition,"awareness":awareness,"last_outcome":latest_report,"policy":{"cutoff":"3:00 PM ET","content_polling":"Every minute, 7:00 AM–2:59 PM ET","reply_polling":"Every minute, 7:00 AM–2:59 PM ET","send_policy":"Immediately after valid approval","alerts":"Bobby only","imessage":"Disabled"}}
 
 DASHBOARD_HTML=Path(__file__).with_name("iris_dashboard.html").read_text(encoding="utf-8")

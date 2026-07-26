@@ -79,7 +79,8 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('object-fit:contain',DASHBOARD_HTML)
   self.assertIn('/assets/icons/raster/iris-eye-64.png',DASHBOARD_HTML)
  def test_v2_truthful_status_logic(self):
-  self.assertIn("green:['Everything is<br>operating normally'",DASHBOARD_HTML)
+  self.assertIn("['Everything is<br>operating normally'",DASHBOARD_HTML)
+  self.assertIn("['IRIS is idle—<br>overnight monitoring'",DASHBOARD_HTML)
   self.assertIn("' of 4 verified'",DASHBOARD_HTML)
   self.assertIn('Manual repair needed',DASHBOARD_HTML)
   self.assertIn('Evidence-based',DASHBOARD_HTML)
@@ -145,6 +146,23 @@ class IrisDashboardHealthTests(unittest.TestCase):
   s=self.snap(now=now,state={},heartbeat={"watchdog":watch})
   self.assertEqual(s["systems"]["scheduler"]["light"],"green")
   self.assertIn("scheduled",s["systems"]["scheduler"]["detail"].lower())
+ def test_overnight_status_is_idle_with_countdown_target(self):
+  now=datetime(2026,7,26,0,55,tzinfo=ET);watch=(now-timedelta(minutes=376)).isoformat()
+  s=self.snap(now=now,state={},heartbeat={"watchdog":watch})
+  self.assertEqual(s["overall"]["light"],"green")
+  self.assertEqual(s["overall"]["mode"],"idle")
+  self.assertIn("idle",s["overall"]["label"].lower())
+  self.assertEqual(s["overall"]["next_start"],datetime(2026,7,26,7,0,tzinfo=ET).isoformat())
+  self.assertEqual(s["systems"]["watchdog"]["light"],"orange")
+  self.assertIn("overnight",s["systems"]["watchdog"]["label"].lower())
+  self.assertIn('function updateIdleCountdown()',DASHBOARD_HTML)
+  self.assertIn('setInterval(updateIdleCountdown,1000)',DASHBOARD_HTML)
+  self.assertIn('Pipeline starts in ',DASHBOARD_HTML)
+ def test_daytime_stale_watchdog_remains_red(self):
+  now=datetime(2026,7,26,11,0,tzinfo=ET);stale=(now-timedelta(minutes=100)).isoformat();fresh=(now-timedelta(seconds=20)).isoformat()
+  s=self.snap(now=now,state={"stage":"hold"},heartbeat={"watchdog":stale,"prepare":fresh,"check_replies":fresh})
+  self.assertEqual(s["systems"]["watchdog"]["light"],"red")
+  self.assertEqual(s["overall"]["light"],"red")
  def test_missing_watchdog_heartbeat_is_orange_until_observed(self):
   now=datetime(2026,7,25,14,0,tzinfo=ET);fresh=(now-timedelta(seconds=15)).isoformat()
   s=self.snap(now=now,state={"stage":"hold","content_valid":False},heartbeat={"prepare":fresh,"check_replies":fresh})

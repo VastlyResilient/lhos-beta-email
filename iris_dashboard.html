@@ -466,6 +466,21 @@ const $=id=>document.getElementById(id);
 const setLight=(el,l)=>{if(el)el.style.setProperty('--light',LIGHTS[l]||LIGHTS.red)};
 const txt=(id,v)=>{const el=$(id);if(el)el.textContent=v??'—'};
 function timeET(iso){return new Date(iso).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})+' ET'}
+let countdownReloaded=false;
+function countdownValue(iso){
+ const seconds=Math.max(0,Math.ceil((new Date(iso).getTime()-Date.now())/1000));
+ const h=Math.floor(seconds/3600),m=Math.floor((seconds%3600)/60),s=seconds%60;
+ return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+}
+function updateIdleCountdown(){
+ if(!snap||snap.overall.mode!=='idle'||!snap.overall.next_start)return;
+ const remaining=new Date(snap.overall.next_start).getTime()-Date.now();
+ if(remaining<=0){if(!countdownReloaded){countdownReloaded=true;load()}return}
+ const value=countdownValue(snap.overall.next_start),line='Pipeline starts in '+value;
+ txt('ovSub',line+'. Overnight monitoring is active.');
+ txt('ovHealthSub',line+'. Daily polling begins at 7:00 AM ET.');
+ txt('ovSchedValue',value);txt('sysSchedValue',value);
+}
 
 /* ---------- scroll spy ---------- */
 const SECTION_TITLES={overview:'Overview',systems:'Core Systems',edition:'Today’s Edition',ahead:'Advance Awareness'};
@@ -498,21 +513,21 @@ if(START_SECTION)requestAnimationFrame(()=>scrollToSection(START_SECTION,false))
 
 /* ---------- render ---------- */
 function render(d){
- snap=d;const o=d.overall,L=o.light;
+ snap=d;countdownReloaded=false;const o=d.overall,L=o.light,idle=o.mode==='idle';
  document.documentElement.style.setProperty('--light',LIGHTS[L]);
  setLight($('railLiveDot'),L);setLight($('topLiveDot'),L);
  const t=timeET(d.generated_at);
  /* overview */
- const heads={green:['Everything is<br>operating normally','IRIS is healthy. No manual repair is needed.'],orange:['Operating normally—<br>one thing to watch',o.detail],red:['Attention<br>required',o.detail]};
+ const heads={green:idle?['IRIS is idle—<br>overnight monitoring',o.detail]:['Everything is<br>operating normally','IRIS is healthy. No manual repair is needed.'],orange:['Operating normally—<br>one thing to watch',o.detail],red:['Attention<br>required',o.detail]};
  $('ovTitle').innerHTML=heads[L][0];txt('ovSub',heads[L][1]);
- setLight($('ovPill'),L);txt('ovPillText',{green:'Verified',orange:'Watching',red:'Attention'}[L]+' · '+t);
- setLight($('ovRing'),L);$('ovRing').classList.toggle('live',L==='green');
- txt('ovHealthValue',{green:'Healthy',orange:'Observing',red:'Attention'}[L]);
+ setLight($('ovPill'),L);txt('ovPillText',(idle?'Idle':{green:'Verified',orange:'Watching',red:'Attention'}[L])+' · '+t);
+ setLight($('ovRing'),L);$('ovRing').classList.toggle('live',L==='green'&&!idle);
+ txt('ovHealthValue',idle?'Idle':{green:'Healthy',orange:'Observing',red:'Attention'}[L]);
  txt('ovHealthSub',o.detail);
  const g=d.systems.google,s=d.systems.scheduler,w=d.systems.watchdog,a=d.systems.api;
  const val=(x,ok,mid,bad)=>x.light==='green'?ok:x.light==='orange'?mid:bad;
  txt('ovGoogleValue',val(g,'Connected','Degraded','Fault'));txt('ovGoogleSub',g.detail);setLight($('ovGoogleValue'),g.light);
- txt('ovSchedValue',val(s,'Every minute','Delayed','Stale'));txt('ovSchedSub',s.detail);setLight($('ovSchedValue'),s.light);
+ txt('ovSchedValue',idle?'Idle':val(s,'Every minute','Delayed','Stale'));txt('ovSchedSub',s.detail);setLight($('ovSchedValue'),s.light);
  txt('ovWatchValue',val(w,'Online','Delayed','Stale'));txt('ovWatchSub',w.detail);setLight($('ovWatchValue'),w.light);
  txt('ovApiValue',val(a,'Online','Degraded','Down'));txt('ovApiSub',a.detail);setLight($('ovApiChip'),a.light);
  /* systems */
@@ -525,7 +540,7 @@ function render(d){
  else{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"><span>Live connector check</span><span class="svc-state">${g.light==='orange'?'Degraded':'Not verified'}</span>`;svc.append(r)}
  txt('sysGoogleFootText',g.light==='green'?'OAuth refresh succeeded':'OAuth refresh not verified');
  txt('sysApiValue',val(a,'Online','Degraded','Down'));setLight($('sysApiValue'),a.light);txt('sysApiSub',a.detail);
- txt('sysSchedValue',val(s,'Every minute','Delayed','Stale'));setLight($('sysSchedValue'),s.light);txt('sysSchedSub',s.detail);
+ txt('sysSchedValue',idle?'Idle':val(s,'Every minute','Delayed','Stale'));setLight($('sysSchedValue'),s.light);txt('sysSchedSub',s.detail);
  txt('sysWatchValue',val(w,'Online','Delayed','Stale'));setLight($('sysWatchValue'),w.light);txt('sysWatchSub',w.detail);
  setLight($('sysWatchChip'),w.light);$('sysWatchChip').lastChild.textContent=w.light==='green'?'Self-healing active':w.light==='orange'?'Self-healing delayed':'Self-healing unverified';
  const repair=L==='red';
@@ -565,6 +580,7 @@ function render(d){
  fill(token,'ahTokenChip','ahTokenState','ahTokenSub','Live refresh succeeded');
  fill(timing,'ahTimingChip','ahTimingState','ahTimingSub','Evidence-based');
  fill(heal,'ahHealChip','ahHealState','ahHealSub','Active');
+ updateIdleCountdown();
  $('error').hidden=true;
 }
 async function load(){
@@ -598,7 +614,7 @@ async function load(){
  addEventListener('pagehide',()=>{cancelled=true;frames.forEach(f=>f.close());frames=[];if(frameVideo){frameVideo.removeAttribute('src');frameVideo.load()}if(objectUrl)URL.revokeObjectURL(objectUrl)},{once:true});
 })();
 
-load();setInterval(load,30000);
+load();setInterval(load,30000);setInterval(updateIdleCountdown,1000);
 </script>
 </body>
 </html>
