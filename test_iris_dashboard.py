@@ -85,6 +85,9 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('Evidence-based',DASHBOARD_HTML)
   self.assertIn('IntersectionObserver',DASHBOARD_HTML)
   self.assertIn('prefers-reduced-motion',DASHBOARD_HTML)
+ def test_mobile_topbar_fits_four_links(self):
+  self.assertIn('.topbar .rail-item{flex-direction:row;gap:6px;padding:9px 6px;font-size:11.5px',DASHBOARD_HTML)
+  self.assertIn('.topbar nav{display:flex;gap:4px;flex:1;overflow-x:auto',DASHBOARD_HTML)
  def test_v2_scroll_experience(self):
   self.assertIn('class="scroll-video"',DASHBOARD_HTML)
   self.assertIn('id="fallbackVideo"',DASHBOARD_HTML)
