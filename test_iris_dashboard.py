@@ -158,6 +158,13 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('function updateIdleCountdown()',DASHBOARD_HTML)
   self.assertIn('setInterval(updateIdleCountdown,1000)',DASHBOARD_HTML)
   self.assertIn('function countdownValue(iso)',DASHBOARD_HTML)
+ def test_status_definition_lights_only_illuminate_current_state(self):
+  self.assertEqual(DASHBOARD_HTML.count('data-status-light="green"'),2)
+  self.assertEqual(DASHBOARD_HTML.count('data-status-light="orange"'),2)
+  self.assertEqual(DASHBOARD_HTML.count('data-status-light="red"'),2)
+  self.assertIn('function updateStatusLights(light)',DASHBOARD_HTML)
+  self.assertIn('updateStatusLights(L);',DASHBOARD_HTML)
+  self.assertIn('[data-status-light]:not(.is-current) i{',DASHBOARD_HTML)
  def test_overnight_countdown_has_one_visible_home(self):
   start=DASHBOARD_HTML.index('function updateIdleCountdown()')
   end=DASHBOARD_HTML.index('/* ---------- scroll spy ---------- */',start)

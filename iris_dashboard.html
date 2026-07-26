@@ -137,6 +137,8 @@ h1 em{font-style:italic;font-weight:400}
 .strip-item h3{font-size:14.5px;font-weight:500;display:flex;align-items:center;gap:8px}
 .strip-item p{margin-top:4px;font-size:12.5px;color:var(--iris-text-muted)}
 .strip-item h3 i{width:8px;height:8px;border-radius:50%;background:var(--light);box-shadow:0 0 8px var(--light);font-style:normal}
+[data-status-light] i{transition:background-color 180ms ease,box-shadow 180ms ease,opacity 180ms ease}
+[data-status-light]:not(.is-current) i{background:rgba(190,205,222,.22)!important;box-shadow:none!important;opacity:.55}
 .mini-strip{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 8px 0;font-size:14px;color:var(--iris-text-secondary);text-shadow:0 2px 14px rgba(0,0,0,.75)}
 .mini-strip b{color:var(--iris-text);font-weight:500}
 
@@ -332,9 +334,9 @@ h1 em{font-style:italic;font-weight:400}
   </article>
  </div>
  <footer class="strip" aria-label="Status definitions">
-  <div class="strip-item" style="--light:var(--iris-green)"><div class="icon-tile"><img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Verified</h3><p>All systems operational</p></div></div>
-  <div class="strip-item" style="--light:var(--iris-orange)"><div class="icon-tile"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Observe</h3><p>Degraded performance</p></div></div>
-  <div class="strip-item" style="--light:var(--iris-red)"><div class="icon-tile"><img src="/assets/icons/raster/bell.webp" srcset="/assets/icons/raster/bell-64.png 64w, /assets/icons/raster/bell-128.png 128w, /assets/icons/raster/bell-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Action needed</h3><p>Immediate attention required</p></div></div>
+  <div class="strip-item" data-status-light="green" style="--light:var(--iris-green)"><div class="icon-tile"><img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Verified</h3><p>All systems operational</p></div></div>
+  <div class="strip-item" data-status-light="orange" style="--light:var(--iris-orange)"><div class="icon-tile"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Observe</h3><p>Degraded performance</p></div></div>
+  <div class="strip-item" data-status-light="red" style="--light:var(--iris-red)"><div class="icon-tile"><img src="/assets/icons/raster/bell.webp" srcset="/assets/icons/raster/bell-64.png 64w, /assets/icons/raster/bell-128.png 128w, /assets/icons/raster/bell-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Action needed</h3><p>Immediate attention required</p></div></div>
  </footer>
 </section>
 
@@ -447,9 +449,9 @@ h1 em{font-style:italic;font-weight:400}
   </div>
   <footer class="ah-defs">
    <div class="intro"><h2>How we determine status</h2><p>IRIS relies on live signals and verified evidence. Status reflects what’s real—never what’s assumed.</p></div>
-   <div class="def-col" style="--light:var(--iris-green)"><h3><i></i>Verified working</h3><p>Live checks confirm normal operation and healthy coverage.</p></div>
-   <div class="def-col" style="--light:var(--iris-orange)"><h3><i></i>Observe or expected input</h3><p>Awaiting source availability or external action we can’t force.</p></div>
-   <div class="def-col" style="--light:var(--iris-red)"><h3><i></i>Confirmed failure or stale heartbeat</h3><p>Live signals confirm impact or missing heartbeat beyond threshold.</p></div>
+   <div class="def-col" data-status-light="green" style="--light:var(--iris-green)"><h3><i></i>Verified working</h3><p>Live checks confirm normal operation and healthy coverage.</p></div>
+   <div class="def-col" data-status-light="orange" style="--light:var(--iris-orange)"><h3><i></i>Observe or expected input</h3><p>Awaiting source availability or external action we can’t force.</p></div>
+   <div class="def-col" data-status-light="red" style="--light:var(--iris-red)"><h3><i></i>Confirmed failure or stale heartbeat</h3><p>Live signals confirm impact or missing heartbeat beyond threshold.</p></div>
   </footer>
  </div>
 </section>
@@ -466,6 +468,13 @@ const $=id=>document.getElementById(id);
 const setLight=(el,l)=>{if(el)el.style.setProperty('--light',LIGHTS[l]||LIGHTS.red)};
 const txt=(id,v)=>{const el=$(id);if(el)el.textContent=v??'—'};
 function timeET(iso){return new Date(iso).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})+' ET'}
+function updateStatusLights(light){
+ document.querySelectorAll('[data-status-light]').forEach(item=>{
+  const current=item.dataset.statusLight===light;
+  item.classList.toggle('is-current',current);
+  item.setAttribute('aria-current',current?'true':'false');
+ });
+}
 let countdownReloaded=false;
 function countdownValue(iso){
  const seconds=Math.max(0,Math.ceil((new Date(iso).getTime()-Date.now())/1000));
@@ -513,6 +522,7 @@ if(START_SECTION)requestAnimationFrame(()=>scrollToSection(START_SECTION,false))
 function render(d){
  snap=d;countdownReloaded=false;const o=d.overall,L=o.light,idle=o.mode==='idle';
  document.documentElement.style.setProperty('--light',LIGHTS[L]);
+ updateStatusLights(L);
  setLight($('railLiveDot'),L);setLight($('topLiveDot'),L);
  const t=timeET(d.generated_at);
  /* overview */
