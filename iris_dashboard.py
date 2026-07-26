@@ -1,6 +1,6 @@
 # Truthful, read-only IRIS operations dashboard model and self-contained UI.
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -39,22 +39,27 @@ def _item(light,label,detail,checked_at=None):
     return {"light":light,"label":label,"detail":detail,"checked_at":checked_at}
 
 
+def _is_rest_window(now):
+    return now.hour<7 or now.hour>=18
+
+
 def _overall(systems,now):
     # Overnight, the daily pipeline is intentionally idle. Keep genuine core
     # failures red, but do not promote a delayed hosted watchdog schedule into
     # a false pipeline incident.
-    if now.hour<7:
+    if _is_rest_window(now):
         core=(systems["api"],systems["google"],systems["scheduler"])
         core_light=max((x["light"] for x in core),key=lambda x:SEVERITY[x])
         if core_light=="green":
             start=now.replace(hour=7,minute=0,second=0,microsecond=0)
+            if now.hour>=18:start+=timedelta(days=1)
             item=_item("green","IRIS is idle · overnight monitoring","Core services remain available while the daily workflow rests.")
             item.update({"mode":"idle","next_start":start.isoformat()})
             return item
     light=max((x["light"] for x in systems.values()),key=lambda x:SEVERITY[x])
     if light=="green":return _item("green","IRIS is healthy","Core services are responding and no manual action is needed.")
-    if light=="orange":return _item("orange","IRIS is watching","Nothing is confirmed broken. One signal needs observation.")
-    return _item("red","IRIS needs attention","A verified health signal is broken or stale. Self-healing is already attempting recovery.")
+    if light=="orange":return _item("orange","IRIS is monitoring","No confirmed failure. A check is delayed or awaiting expected input.")
+    return _item("red","IRIS needs attention","A verified failure or long-stale active-window check requires review.")
 
 
 def _scheduler(now,heartbeat,state):
@@ -80,12 +85,16 @@ def _watchdog(now,heartbeat):
     stamp=heartbeat.get("watchdog");age=_age_minutes(stamp,now)
     if age is None:return _item("orange","Awaiting cloud check evidence","The dashboard has not yet recorded a cloud-watchdog heartbeat. No failure is being inferred.")
     if age<=30:return _item("green","Cloud watchdog online",f"The independent watchdog checked in {_age_label(stamp,now)}.",stamp)
-    if now.hour<7 and age>90:
-        item=_item("orange","Overnight cloud check delayed",f"IRIS is idle. The last independent cloud check was {int(age)} minutes ago; core services are verified separately.",stamp)
+    if age<=90:
+        item=_item("green","Cloud check within normal grace",f"The last cloud check was {int(age)} minutes ago. Hosted schedules can drift; no action is needed.",stamp)
+        item["mode"]="grace"
+        return item
+    if _is_rest_window(now):
+        item=_item("orange","Overnight cloud check delayed",f"The last independent cloud check was {int(age)} minutes ago; core services are verified separately.",stamp)
         item["mode"]="overnight"
         return item
-    if age<=90:return _item("orange","Cloud check is delayed",f"The last cloud check was {int(age)} minutes ago. Hosted schedules can drift; no outage is assumed.",stamp)
-    return _item("red","Cloud watchdog is stale",f"No cloud-watchdog heartbeat has arrived for {int(age)} minutes.",stamp)
+    if age<=180:return _item("orange","Cloud check overdue",f"The last cloud check was {int(age)} minutes ago. No outage is confirmed; the hosted scheduler will retry automatically.",stamp)
+    return _item("red","Cloud watchdog is stale",f"No cloud-watchdog heartbeat has arrived for {int(age)} minutes during the active window.",stamp)
 
 
 def _edition(now,state):
@@ -135,9 +144,10 @@ def build_snapshot(*,now,state,heartbeat,connectors,reports,alerts):
     else:awareness.append(_item("red","Google authorization needs attention","The live refresh or connector check failed. Self-healing is already retrying; manual re-consent is needed only if recovery remains red."))
     if edition["stage"]=="hold":awareness.append(_item("orange","Today’s source is still pending",f"IRIS is looking for {edition['source']} every minute until 2:59 PM ET. No system repair is needed."))
     wd=systems["watchdog"]
-    if wd["light"]=="green":awareness.append(_item("green","Self-healing loop is armed","The independent cloud watchdog is checking health. It repairs known n8n and Railway failures before escalating."))
+    if wd.get("mode")=="grace":awareness.append(_item("green","Hosted schedule within normal grace","The latest cloud check is delayed but still within its no-action window."))
+    elif wd["light"]=="green":awareness.append(_item("green","Self-healing loop is armed","The independent cloud watchdog is checking health. It repairs known n8n and Railway failures before escalating."))
     elif wd.get("mode")=="overnight":awareness.append(_item("orange","Overnight monitoring continues","A hosted cloud check is delayed; the API and Google connection remain independently verified."))
-    elif wd["light"]=="orange":awareness.append(_item("orange","Observe the next cloud check","No repair is requested yet. The dashboard will turn red only after the watchdog is genuinely stale."))
+    elif wd["light"]=="orange":awareness.append(_item("orange","Next cloud check pending","No action is needed yet. The hosted scheduler will retry automatically."))
     else:awareness.append(_item("red","Cloud self-healing evidence is stale","The independent watchdog has not checked in within its safe window."))
     latest_report=None
     if reports:

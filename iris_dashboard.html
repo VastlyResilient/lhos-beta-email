@@ -335,7 +335,7 @@ h1 em{font-style:italic;font-weight:400}
  </div>
  <footer class="strip" aria-label="Status definitions">
   <div class="strip-item" data-status-light="green" style="--light:var(--iris-green)"><div class="icon-tile"><img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Verified</h3><p>All systems operational</p></div></div>
-  <div class="strip-item" data-status-light="orange" style="--light:var(--iris-orange)"><div class="icon-tile"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Observe</h3><p>Degraded performance</p></div></div>
+  <div class="strip-item" data-status-light="orange" style="--light:var(--iris-orange)"><div class="icon-tile"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Waiting or delayed</h3><p>No confirmed failure</p></div></div>
   <div class="strip-item" data-status-light="red" style="--light:var(--iris-red)"><div class="icon-tile"><img src="/assets/icons/raster/bell.webp" srcset="/assets/icons/raster/bell-64.png 64w, /assets/icons/raster/bell-128.png 128w, /assets/icons/raster/bell-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><div><h3><i></i>Action needed</h3><p>Immediate attention required</p></div></div>
  </footer>
 </section>
@@ -420,7 +420,7 @@ h1 em{font-style:italic;font-weight:400}
  </header>
  <div class="bento ah-grid">
   <article class="liquid-glass liquid-glass--primary card ah-main">
-   <div class="card-head"><div class="icon-tile"><img src="/assets/icons/raster/arrow-ahead.webp" srcset="/assets/icons/raster/arrow-ahead-64.png 64w, /assets/icons/raster/arrow-ahead-128.png 128w, /assets/icons/raster/arrow-ahead-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>What requires attention now?</h2></div>
+   <div class="card-head"><div class="icon-tile"><img src="/assets/icons/raster/arrow-ahead.webp" srcset="/assets/icons/raster/arrow-ahead-64.png 64w, /assets/icons/raster/arrow-ahead-128.png 128w, /assets/icons/raster/arrow-ahead-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2 id="ahQuestion">What is IRIS monitoring?</h2></div>
    <div class="ah-attention" id="ahAttention">
     <div class="icon-tile sm"><img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true" id="ahAttIcon"></div>
     <div><h3 id="ahAttTitle">—</h3><p id="ahAttDetail">—</p></div>
@@ -450,7 +450,7 @@ h1 em{font-style:italic;font-weight:400}
   <footer class="ah-defs">
    <div class="intro"><h2>How we determine status</h2><p>IRIS relies on live signals and verified evidence. Status reflects what’s real—never what’s assumed.</p></div>
    <div class="def-col" data-status-light="green" style="--light:var(--iris-green)"><h3><i></i>Verified working</h3><p>Live checks confirm normal operation and healthy coverage.</p></div>
-   <div class="def-col" data-status-light="orange" style="--light:var(--iris-orange)"><h3><i></i>Observe or expected input</h3><p>Awaiting source availability or external action we can’t force.</p></div>
+   <div class="def-col" data-status-light="orange" style="--light:var(--iris-orange)"><h3><i></i>Waiting or delayed</h3><p>IRIS is waiting for input or the next verified check.</p></div>
    <div class="def-col" data-status-light="red" style="--light:var(--iris-red)"><h3><i></i>Confirmed failure or stale heartbeat</h3><p>Live signals confirm impact or missing heartbeat beyond threshold.</p></div>
   </footer>
  </div>
@@ -526,11 +526,11 @@ function render(d){
  setLight($('railLiveDot'),L);setLight($('topLiveDot'),L);
  const t=timeET(d.generated_at);
  /* overview */
- const heads={green:idle?['IRIS is idle—<br>overnight monitoring',o.detail]:['Everything is<br>operating normally','IRIS is healthy. No manual repair is needed.'],orange:['Operating normally—<br>one thing to watch',o.detail],red:['Attention<br>required',o.detail]};
+ const heads={green:idle?['IRIS is idle—<br>overnight monitoring',o.detail]:['Everything is<br>operating normally','IRIS is healthy. No manual repair is needed.'],orange:['Operating normally—<br>monitoring a delay',o.detail],red:['Attention<br>required',o.detail]};
  $('ovTitle').innerHTML=heads[L][0];txt('ovSub',heads[L][1]);
- setLight($('ovPill'),L);txt('ovPillText',(idle?'Idle':{green:'Verified',orange:'Watching',red:'Attention'}[L])+' · '+t);
+ setLight($('ovPill'),L);txt('ovPillText',(idle?'Idle':{green:'Verified',orange:'Monitoring',red:'Attention'}[L])+' · '+t);
  setLight($('ovRing'),L);$('ovRing').classList.toggle('live',L==='green'&&!idle);
- txt('ovHealthValue',idle?'Idle':{green:'Healthy',orange:'Observing',red:'Attention'}[L]);
+ txt('ovHealthValue',idle?'Idle':{green:'Healthy',orange:'Monitoring',red:'Attention'}[L]);
  txt('ovHealthSub',idle?'Core checks passed.':o.detail);
  const g=d.systems.google,s=d.systems.scheduler,w=d.systems.watchdog,a=d.systems.api;
  const val=(x,ok,mid,bad)=>x.light==='green'?ok:x.light==='orange'?mid:bad;
@@ -574,7 +574,8 @@ function render(d){
  txt('edSource',e.source);txt('edPolling','Every minute until '+d.policy.cutoff);txt('edDelivery',d.policy.send_policy);txt('edAlerts',d.policy.alerts+' · iMessage '+d.policy.imessage.toLowerCase());
  setLight($('edStripDot'),L);$('edStripText').innerHTML='Self-healing is watching &nbsp;•&nbsp; Manual repair needed: <b>'+(repair?'Yes':'No')+'</b>';
  /* ahead */
- setLight($('ahPill'),L);txt('ahPillText',{green:'Verified',orange:'Watching',red:'Attention'}[L]+' · '+t);
+ txt('ahQuestion',L==='red'?'What requires attention now?':'What is IRIS monitoring?');
+ setLight($('ahPill'),L);txt('ahPillText',{green:'Verified',orange:'Monitoring',red:'Attention'}[L]+' · '+t);
  const aw=d.awareness||[];
  const find=(...keys)=>aw.find(x=>keys.some(k=>x.label.toLowerCase().includes(k)));
  const attention=aw.filter(x=>x.light!=='green').sort((a,b)=>(a.light==='red'?0:1)-(b.light==='red'?0:1))[0];
