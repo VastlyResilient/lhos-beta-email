@@ -589,10 +589,10 @@ async function load(){
  fallback.addEventListener('loadedmetadata',()=>{fallbackDuration=fallback.duration||0});
  fallback.addEventListener('seeked',()=>{fallbackSeeking=false});
  addEventListener('resize',resize,{passive:true});
- resize();if(!reduced)extract();
- function tick(){const max=Math.max(1,document.documentElement.scrollHeight-innerHeight),target=reduced?0:clamp(scrollY/max,0,1);smoothed+=(target-smoothed)*.1;
+ resize();extract();
+ function tick(){const max=Math.max(1,document.documentElement.scrollHeight-innerHeight),target=clamp(scrollY/max,0,1);smoothed+=(target-smoothed)*.1;
   if(frames.length){const i=Math.min(frames.length-1,Math.round(smoothed*(frames.length-1)));if(i!==lastIndex){resize();draw(frames[i]);lastIndex=i}}
-  else if(fallbackDuration&&!fallbackSeeking&&!reduced){const t=smoothed*Math.max(0,fallbackDuration-.05);if(Math.abs(fallback.currentTime-t)>.001){fallbackSeeking=true;fallback.currentTime=t}}
+  else if(fallbackDuration&&!fallbackSeeking){const t=smoothed*Math.max(0,fallbackDuration-.05);if(Math.abs(fallback.currentTime-t)>.001){fallbackSeeking=true;fallback.currentTime=t}}
   requestAnimationFrame(tick)}
  requestAnimationFrame(tick);
  addEventListener('pagehide',()=>{cancelled=true;frames.forEach(f=>f.close());frames=[];if(frameVideo){frameVideo.removeAttribute('src');frameVideo.load()}if(objectUrl)URL.revokeObjectURL(objectUrl)},{once:true});

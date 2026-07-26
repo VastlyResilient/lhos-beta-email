@@ -85,6 +85,12 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('Evidence-based',DASHBOARD_HTML)
   self.assertIn('IntersectionObserver',DASHBOARD_HTML)
   self.assertIn('prefers-reduced-motion',DASHBOARD_HTML)
+ def test_background_scroll_scrub_survives_reduced_motion(self):
+  self.assertIn('resize();extract();',DASHBOARD_HTML)
+  self.assertIn('target=clamp(scrollY/max,0,1);',DASHBOARD_HTML)
+  self.assertNotIn('target=reduced?0:',DASHBOARD_HTML)
+  self.assertIn('@media(prefers-reduced-motion:reduce)',DASHBOARD_HTML)
+
  def test_mobile_topbar_fits_four_links(self):
   self.assertIn('.topbar .rail-item{flex-direction:row;gap:6px;padding:9px 6px;font-size:11.5px',DASHBOARD_HTML)
   self.assertIn('.topbar nav{display:flex;gap:4px;flex:1;overflow-x:auto',DASHBOARD_HTML)
