@@ -48,7 +48,7 @@ def _overall(systems,now):
         core_light=max((x["light"] for x in core),key=lambda x:SEVERITY[x])
         if core_light=="green":
             start=now.replace(hour=7,minute=0,second=0,microsecond=0)
-            item=_item("green","IRIS is idle · overnight monitoring","The daily pipeline is scheduled to start at 7:00 AM ET.")
+            item=_item("green","IRIS is idle · overnight monitoring","Core services remain available while the daily workflow rests.")
             item.update({"mode":"idle","next_start":start.isoformat()})
             return item
     light=max((x["light"] for x in systems.values()),key=lambda x:SEVERITY[x])
@@ -60,7 +60,7 @@ def _overall(systems,now):
 def _scheduler(now,heartbeat,state):
     prepare=heartbeat.get("prepare");replies=heartbeat.get("check_replies")
     if now.hour<7:
-        return _item("green","Scheduler resting","The daily polling window is scheduled for 7:00 AM–3:00 PM ET.",prepare)
+        return _item("green","Scheduler resting","Scheduled activity is paused overnight.",prepare)
     if now.hour<15:
         ages=[x for x in (_age_minutes(prepare,now),_age_minutes(replies,now)) if x is not None]
         if len(ages)<2:
@@ -103,7 +103,7 @@ def _edition(now,state):
         light="red" if valid else "orange";label="Edition missed after valid content" if valid else "Safely not sent"
         detail=state.get("not_sent_reason") or ("Valid content did not reach a verified delivery state." if valid else "No valid dated content was available by the cutoff; IRIS failed closed.")
     elif stage=="no_state":
-        if now.hour<7:light,label,detail="green","Day has not started","The first content check is scheduled for 7:00 AM ET."
+        if now.hour<7:light,label,detail="green","Day has not started","No edition action is expected before the polling window."
         else:light,label,detail="orange","Waiting for today’s first state","No edition state has been recorded yet. System health is evaluated separately."
     else:light,label,detail=labels.get(stage,("orange",stage.replace('_',' ').title(),"IRIS recorded this state without inventing an interpretation."))
     steps=[];order=[("content","Content"),("review","Review"),("approval","Approval"),("delivery","Delivery")];done=set();current=None
@@ -136,7 +136,7 @@ def build_snapshot(*,now,state,heartbeat,connectors,reports,alerts):
     if edition["stage"]=="hold":awareness.append(_item("orange","Today’s source is still pending",f"IRIS is looking for {edition['source']} every minute until 2:59 PM ET. No system repair is needed."))
     wd=systems["watchdog"]
     if wd["light"]=="green":awareness.append(_item("green","Self-healing loop is armed","The independent cloud watchdog is checking health. It repairs known n8n and Railway failures before escalating."))
-    elif wd.get("mode")=="overnight":awareness.append(_item("orange","Overnight monitoring continues","The daily pipeline is idle. A hosted cloud check is delayed, while the API and Google connection remain independently verified."))
+    elif wd.get("mode")=="overnight":awareness.append(_item("orange","Overnight monitoring continues","A hosted cloud check is delayed; the API and Google connection remain independently verified."))
     elif wd["light"]=="orange":awareness.append(_item("orange","Observe the next cloud check","No repair is requested yet. The dashboard will turn red only after the watchdog is genuinely stale."))
     else:awareness.append(_item("red","Cloud self-healing evidence is stale","The independent watchdog has not checked in within its safe window."))
     latest_report=None

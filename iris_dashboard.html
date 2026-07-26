@@ -326,7 +326,7 @@ h1 em{font-style:italic;font-weight:400}
    <p class="card-sub" id="ovWatchSub"></p>
   </article>
   <article class="liquid-glass card ov-api">
-   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/database.webp" srcset="/assets/icons/raster/database-64.png 64w, /assets/icons/raster/database-128.png 128w, /assets/icons/raster/database-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Pipeline API</h2></div>
+   <div class="card-head"><div class="icon-tile sm"><img src="/assets/icons/raster/database.webp" srcset="/assets/icons/raster/database-64.png 64w, /assets/icons/raster/database-128.png 128w, /assets/icons/raster/database-256.png 256w" sizes="34px" alt="" aria-hidden="true"></div><h2>Live status</h2></div>
    <p class="card-sub" id="ovApiSub" style="margin-top:0"></p>
    <div class="api-state"><div class="card-value sm" id="ovApiValue">Online</div><div class="state-chip" id="ovApiChip"><i></i>In sync</div></div>
   </article>
@@ -476,10 +476,8 @@ function updateIdleCountdown(){
  if(!snap||snap.overall.mode!=='idle'||!snap.overall.next_start)return;
  const remaining=new Date(snap.overall.next_start).getTime()-Date.now();
  if(remaining<=0){if(!countdownReloaded){countdownReloaded=true;load()}return}
- const value=countdownValue(snap.overall.next_start),line='Pipeline starts in '+value;
- txt('ovSub',line+'. Overnight monitoring is active.');
- txt('ovHealthSub',line+'. Daily polling begins at 7:00 AM ET.');
- txt('ovSchedValue',value);txt('sysSchedValue',value);
+ const value=countdownValue(snap.overall.next_start);
+ txt('ovSchedValue',value);
 }
 
 /* ---------- scroll spy ---------- */
@@ -523,43 +521,44 @@ function render(d){
  setLight($('ovPill'),L);txt('ovPillText',(idle?'Idle':{green:'Verified',orange:'Watching',red:'Attention'}[L])+' · '+t);
  setLight($('ovRing'),L);$('ovRing').classList.toggle('live',L==='green'&&!idle);
  txt('ovHealthValue',idle?'Idle':{green:'Healthy',orange:'Observing',red:'Attention'}[L]);
- txt('ovHealthSub',o.detail);
+ txt('ovHealthSub',idle?'Core checks passed.':o.detail);
  const g=d.systems.google,s=d.systems.scheduler,w=d.systems.watchdog,a=d.systems.api;
  const val=(x,ok,mid,bad)=>x.light==='green'?ok:x.light==='orange'?mid:bad;
- txt('ovGoogleValue',val(g,'Connected','Degraded','Fault'));txt('ovGoogleSub',g.detail);setLight($('ovGoogleValue'),g.light);
- txt('ovSchedValue',idle?'Idle':val(s,'Every minute','Delayed','Stale'));txt('ovSchedSub',s.detail);setLight($('ovSchedValue'),s.light);
- txt('ovWatchValue',val(w,'Online','Delayed','Stale'));txt('ovWatchSub',w.detail);setLight($('ovWatchValue'),w.light);
- txt('ovApiValue',val(a,'Online','Degraded','Down'));txt('ovApiSub',a.detail);setLight($('ovApiChip'),a.light);
+ txt('ovGoogleValue',val(g,'Available','Degraded','Fault'));txt('ovGoogleSub',g.light==='green'?'Workspace access verified.':g.detail);setLight($('ovGoogleValue'),g.light);
+ txt('ovSchedValue',idle?'—':val(s,'Every minute','Delayed','Stale'));txt('ovSchedSub',idle?'Time until daily polling resumes.':s.detail);setLight($('ovSchedValue'),s.light);
+ txt('ovWatchValue',val(w,'Online',w.mode==='overnight'?'Pending':'Delayed','Stale'));txt('ovWatchSub',w.mode==='overnight'?'Independent overnight evidence is late.':w.detail);setLight($('ovWatchValue'),w.light);
+ txt('ovApiValue',val(a,'Responsive','Degraded','Down'));txt('ovApiSub',a.light==='green'?'This dashboard is receiving current data.':a.detail);setLight($('ovApiChip'),a.light);
  /* systems */
  const all=[g,s,w,a],verified=all.filter(x=>x.light==='green').length,worst=all.some(x=>x.light==='red')?'red':all.some(x=>x.light==='orange')?'orange':'green';
  setLight($('sysPill'),worst);txt('sysPillText',verified+' of 4 verified');
- txt('sysSub',worst==='green'?'Four independent signals confirm IRIS is healthy.':verified+' of 4 signals verified. Live detail below.');
- txt('sysGoogleValue',val(g,'Connected','Degraded','Fault'));setLight($('sysGoogleValue'),g.light);txt('sysGoogleSub',g.detail);
+ txt('sysSub','Independent evidence from Google, API, scheduler, and watchdog.');
+ txt('sysGoogleValue',val(g,'Connected','Degraded','Fault'));setLight($('sysGoogleValue'),g.light);txt('sysGoogleSub',g.light==='green'?'Workspace authentication is current.':g.detail);
  const svc=$('svcList');svc.replaceChildren();
- if(g.light==='green'){['Gmail','Drive','Contacts'].forEach(n=>{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true"><span>${n}</span><span class="svc-state"><span class="pill-dot" style="--light:var(--iris-green)"></span>Verified</span>`;svc.append(r)})}
+ if(g.light==='green'){['Gmail','Drive','Contacts'].forEach(n=>{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<img src="/assets/icons/raster/check-circle.webp" srcset="/assets/icons/raster/check-circle-64.png 64w, /assets/icons/raster/check-circle-128.png 128w, /assets/icons/raster/check-circle-256.png 256w" sizes="34px" alt="" aria-hidden="true"><span>${n}</span>`;svc.append(r)})}
  else{const r=document.createElement('div');r.className='svc-row';r.innerHTML=`<img src="/assets/icons/raster/info.webp" srcset="/assets/icons/raster/info-64.png 64w, /assets/icons/raster/info-128.png 128w, /assets/icons/raster/info-256.png 256w" sizes="34px" alt="" aria-hidden="true"><span>Live connector check</span><span class="svc-state">${g.light==='orange'?'Degraded':'Not verified'}</span>`;svc.append(r)}
- txt('sysGoogleFootText',g.light==='green'?'OAuth refresh succeeded':'OAuth refresh not verified');
+ txt('sysGoogleFootText',g.light==='green'?'Checked '+timeET(g.checked_at||d.generated_at):'Connector evidence unavailable');
  txt('sysApiValue',val(a,'Online','Degraded','Down'));setLight($('sysApiValue'),a.light);txt('sysApiSub',a.detail);
- txt('sysSchedValue',idle?'Idle':val(s,'Every minute','Delayed','Stale'));setLight($('sysSchedValue'),s.light);txt('sysSchedSub',s.detail);
+ txt('sysSchedValue',idle?'Scheduled rest':val(s,'Every minute','Delayed','Stale'));setLight($('sysSchedValue'),s.light);txt('sysSchedSub',s.detail);
  txt('sysWatchValue',val(w,'Online','Delayed','Stale'));setLight($('sysWatchValue'),w.light);txt('sysWatchSub',w.detail);
- setLight($('sysWatchChip'),w.light);$('sysWatchChip').lastChild.textContent=w.light==='green'?'Self-healing active':w.light==='orange'?'Self-healing delayed':'Self-healing unverified';
+ setLight($('sysWatchChip'),w.light);$('sysWatchChip').lastChild.textContent=w.mode==='overnight'?'Overnight evidence':w.light==='green'?'Self-healing active':w.light==='orange'?'Self-healing delayed':'Self-healing unverified';
  const repair=L==='red';
- setLight($('sysStripDot'),L);$('sysStripText').innerHTML='Self-healing coverage '+({green:'active',orange:'delayed',red:'unverified'}[w.light])+' &nbsp;•&nbsp; Manual repair needed: <b>'+(repair?'Yes':'No')+'</b>';
+ setLight($('sysStripDot'),L);txt('sysStripText',repair?'Manual review is required.':'No manual repair is required.');
  /* edition */
  const e=d.edition;
  setLight($('edPill'),e.light);txt('edPillText',e.label);
  const reassure=L==='green'
-  ?(e.light==='green'?`IRIS is healthy. Today’s edition is ${e.label.toLowerCase()}.`:`IRIS is healthy. Today’s edition is waiting for ${e.source}.`)
+  ?(idle&&e.stage==='no_state'?'No edition action is expected before the polling window.':e.light==='green'?`Edition status: ${e.label}.`:`IRIS is waiting for ${e.source}.`)
   :o.label+'. '+o.detail;
  setLight($('edReassure'),e.light);txt('edReassureText',reassure);
- const stepText={done:'Complete',pending:'Not started'};
+ const doneText={content:'Content ready',review:'Review sent',approval:'Approved',delivery:'Delivered'};
+ const pendingText={content:'Awaiting window',review:'After content',approval:'After review',delivery:'After approval'};
  const notSent=(e.label||'').toLowerCase().includes('not sent')||(e.stage||'')==='not_sent';
  const currentText={content:e.light==='orange'?(notSent?'Not received':'Waiting for file'):'Processing',review:'In review',approval:'Awaiting approval',delivery:notSent?'Safely held — no send':e.light==='red'?'Failed':'Sending'};
  const tl=$('edTimeline');tl.replaceChildren();
  e.steps.forEach((st,i)=>{const el=document.createElement('div');el.className='tl-step '+st.state;
   const light=st.state==='done'?'green':st.state==='current'?e.light:'muted';
   el.style.setProperty('--light',LIGHTS[light]||'rgba(210,222,235,.4)');
-  const label=st.state==='current'?currentText[st.key]:stepText[st.state];
+  const label=st.state==='current'?currentText[st.key]:st.state==='done'?doneText[st.key]:pendingText[st.key];
   el.setAttribute('aria-label',`Step ${i+1} ${st.label}: ${label}`);
   el.innerHTML=`<div class="tl-num">${i+1}</div><div><h3>${st.label}</h3><div class="tl-state"><i></i>${label}</div></div>`;tl.append(el)});
  txt('edSource',e.source);txt('edPolling','Every minute until '+d.policy.cutoff);txt('edDelivery',d.policy.send_policy);txt('edAlerts',d.policy.alerts+' · iMessage '+d.policy.imessage.toLowerCase());

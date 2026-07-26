@@ -157,7 +157,22 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn("overnight",s["systems"]["watchdog"]["label"].lower())
   self.assertIn('function updateIdleCountdown()',DASHBOARD_HTML)
   self.assertIn('setInterval(updateIdleCountdown,1000)',DASHBOARD_HTML)
-  self.assertIn('Pipeline starts in ',DASHBOARD_HTML)
+  self.assertIn('function countdownValue(iso)',DASHBOARD_HTML)
+ def test_overnight_countdown_has_one_visible_home(self):
+  start=DASHBOARD_HTML.index('function updateIdleCountdown()')
+  end=DASHBOARD_HTML.index('/* ---------- scroll spy ---------- */',start)
+  countdown=DASHBOARD_HTML[start:end]
+  self.assertIn("txt('ovSchedValue',value)",countdown)
+  self.assertNotIn("txt('ovSub',line",countdown)
+  self.assertNotIn("txt('ovHealthSub',line",countdown)
+  self.assertNotIn("txt('sysSchedValue',value)",countdown)
+  self.assertEqual(countdown.count("countdownValue(snap.overall.next_start)"),1)
+ def test_summary_and_diagnostic_copy_are_not_duplicated(self):
+  self.assertIn('<h2>Live status</h2>',DASHBOARD_HTML)
+  self.assertEqual(DASHBOARD_HTML.count('<h2>Pipeline API</h2>'),1)
+  self.assertNotIn("pending:'Not started'",DASHBOARD_HTML)
+  self.assertIn("pendingText={content:'Awaiting window'",DASHBOARD_HTML)
+  self.assertNotIn('>Verified</span>`;svc.append',DASHBOARD_HTML)
  def test_daytime_stale_watchdog_remains_red(self):
   now=datetime(2026,7,26,11,0,tzinfo=ET);stale=(now-timedelta(minutes=100)).isoformat();fresh=(now-timedelta(seconds=20)).isoformat()
   s=self.snap(now=now,state={"stage":"hold"},heartbeat={"watchdog":stale,"prepare":fresh,"check_replies":fresh})
