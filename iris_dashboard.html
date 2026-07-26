@@ -36,7 +36,7 @@ a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;backgroun
 .wp-edition{background-image:url('/assets/wallpaper-edition.webp')}
 .wp-ahead{background-image:url('/assets/wallpaper-ahead.webp')}
 .scroll-video{position:fixed;inset:0;z-index:1;background:transparent;overflow:hidden;pointer-events:none}
-.scroll-video video,.scroll-video canvas{position:absolute;inset:0;width:100%;height:100%}
+.scroll-video video,.scroll-video canvas{position:absolute;inset:0;width:100%;height:100%;will-change:transform;transform:translateZ(0)}
 .scroll-video video{object-fit:cover;opacity:1;transition:opacity .6s ease}
 .scroll-video video.frames-ready{opacity:0}
 .scroll-video canvas{opacity:0;transition:opacity .6s ease}
@@ -602,25 +602,54 @@ async function load(){
 (function initScrollVideo(){
  const VIDEO_URL='https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4';
  const canvas=$('videoCanvas'),fallback=$('fallbackVideo');if(!canvas||!fallback)return;
- const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const mobile=matchMedia('(max-width: 760px)').matches;
  const ctx=canvas.getContext('2d',{alpha:false});
- let frames=[],objectUrl=null,frameVideo=null,cancelled=false,lastIndex=-1,smoothed=0,fallbackDuration=0,fallbackSeeking=false;
+ let frames=[],objectUrl=null,frameVideo=null,cancelled=false,lastIndex=-1,smoothed=0,fallbackDuration=0,fallbackSeeking=false,fallbackTarget=0,fallbackUnlocked=false;
  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+ const setMode=mode=>document.documentElement.dataset.scrollVideo=mode;
  function once(target,event){return new Promise((res,rej)=>{const done=()=>{clean();res()},fail=()=>{clean();rej(new Error(event+' failed'))},clean=()=>{target.removeEventListener(event,done);target.removeEventListener('error',fail)};target.addEventListener(event,done,{once:true});target.addEventListener('error',fail,{once:true})})}
+ function releaseExtractor(){if(frameVideo){frameVideo.removeAttribute('src');frameVideo.load();frameVideo=null}if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=null}}
  function resize(){const dpr=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),h=Math.max(1,Math.round(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;lastIndex=-1}}
  function draw(f){const cw=canvas.width,ch=canvas.height,sc=Math.max(cw/f.width,ch/f.height),dw=f.width*sc,dh=f.height*sc;ctx.drawImage(f,(cw-dw)/2,(ch-dh)/2,dw,dh)}
  function seek(v,t){if(Math.abs(v.currentTime-t)<.001)return Promise.resolve();v.currentTime=t;return once(v,'seeked')}
- async function extract(){try{const r=await fetch(VIDEO_URL,{mode:'cors'});if(!r.ok)throw new Error('video fetch '+r.status);const blob=await r.blob();if(cancelled)return;objectUrl=URL.createObjectURL(blob);frameVideo=document.createElement('video');frameVideo.muted=true;frameVideo.playsInline=true;frameVideo.preload='auto';frameVideo.src=objectUrl;await once(frameVideo,'loadedmetadata');if(frameVideo.readyState<2)await once(frameVideo,'loadeddata');const dur=frameVideo.duration,count=Math.min(120,Math.max(30,Math.round(dur*24))),scale=Math.min(1,1280/frameVideo.videoWidth),wid=Math.max(1,Math.round(frameVideo.videoWidth*scale)),hei=Math.max(1,Math.round(frameVideo.videoHeight*scale)),end=Math.max(0,dur-.05);for(let i=0;i<count&&!cancelled;i++){await seek(frameVideo,(i/(count-1))*end);if(cancelled)break;frames.push(await createImageBitmap(frameVideo,{resizeWidth:wid,resizeHeight:hei,resizeQuality:'high'}))}if(cancelled)return;resize();canvas.classList.add('is-ready');fallback.classList.add('frames-ready')}catch(e){/* fallback video scrub remains */}}
- fallback.addEventListener('loadedmetadata',()=>{fallbackDuration=fallback.duration||0});
- fallback.addEventListener('seeked',()=>{fallbackSeeking=false});
+ async function extract(){
+  const extracted=[];
+  try{
+   const r=await fetch(VIDEO_URL,{mode:'cors'});if(!r.ok)throw new Error('video fetch '+r.status);
+   const blob=await r.blob();if(cancelled)return;
+   objectUrl=URL.createObjectURL(blob);frameVideo=document.createElement('video');frameVideo.muted=true;frameVideo.playsInline=true;frameVideo.preload='auto';frameVideo.src=objectUrl;frameVideo.load();
+   if(frameVideo.readyState<1)await once(frameVideo,'loadedmetadata');if(frameVideo.readyState<2)await once(frameVideo,'loadeddata');
+   const dur=frameVideo.duration,count=mobile?Math.min(48,Math.max(32,Math.round(dur*6))):Math.min(120,Math.max(30,Math.round(dur*24))),maxWidth=mobile?640:1280,scale=Math.min(1,maxWidth/frameVideo.videoWidth),wid=Math.max(1,Math.round(frameVideo.videoWidth*scale)),hei=Math.max(1,Math.round(frameVideo.videoHeight*scale)),end=Math.max(0,dur-.05);
+   for(let i=0;i<count&&!cancelled;i++){await seek(frameVideo,(i/(count-1))*end);if(cancelled)break;extracted.push(await createImageBitmap(frameVideo,{resizeWidth:wid,resizeHeight:hei,resizeQuality:'high'}))}
+   if(cancelled){extracted.forEach(f=>f.close());return}
+   frames=extracted;releaseExtractor();resize();draw(frames[0]);canvas.classList.add('is-ready');fallback.classList.add('frames-ready');setMode(mobile?'frames-mobile':'frames-desktop');
+  }catch(e){
+   extracted.forEach(f=>f.close());frames=[];releaseExtractor();canvas.classList.remove('is-ready');fallback.classList.remove('frames-ready');setMode('video-fallback');
+  }
+ }
+ function syncFallbackDuration(){fallbackDuration=Number.isFinite(fallback.duration)?fallback.duration:0}
+ function updateFallback(t){
+  fallbackTarget=t;if(!fallbackDuration||fallbackSeeking||fallback.readyState<2)return;
+  if(Math.abs(fallback.currentTime-t)<=.001)return;
+  fallbackSeeking=true;
+  try{fallback.currentTime=t}catch(e){fallbackSeeking=false}
+ }
+ function releaseFallbackSeek(){fallbackSeeking=false;if(Math.abs(fallback.currentTime-fallbackTarget)>.035)updateFallback(fallbackTarget)}
+ function unlockFallback(){
+  if(fallbackUnlocked)return;fallbackUnlocked=true;
+  const playback=fallback.play();
+  if(playback&&typeof playback.then==='function')playback.then(()=>{fallback.pause();updateFallback(fallbackTarget)}).catch(()=>{fallbackUnlocked=false});
+ }
+ setMode('loading');fallback.setAttribute('webkit-playsinline','');fallback.addEventListener('loadedmetadata',syncFallbackDuration);fallback.addEventListener('seeked',releaseFallbackSeek);syncFallbackDuration();
+ addEventListener('touchstart',unlockFallback,{once:true,passive:true});addEventListener('pointerdown',unlockFallback,{once:true,passive:true});
  addEventListener('resize',resize,{passive:true});
  resize();extract();
  function tick(){const max=Math.max(1,document.documentElement.scrollHeight-innerHeight),target=clamp(scrollY/max,0,1);smoothed+=(target-smoothed)*.1;
   if(frames.length){const i=Math.min(frames.length-1,Math.round(smoothed*(frames.length-1)));if(i!==lastIndex){resize();draw(frames[i]);lastIndex=i}}
-  else if(fallbackDuration&&!fallbackSeeking){const t=smoothed*Math.max(0,fallbackDuration-.05);if(Math.abs(fallback.currentTime-t)>.001){fallbackSeeking=true;fallback.currentTime=t}}
+  else updateFallback(smoothed*Math.max(0,fallbackDuration-.05));
   requestAnimationFrame(tick)}
  requestAnimationFrame(tick);
- addEventListener('pagehide',()=>{cancelled=true;frames.forEach(f=>f.close());frames=[];if(frameVideo){frameVideo.removeAttribute('src');frameVideo.load()}if(objectUrl)URL.revokeObjectURL(objectUrl)},{once:true});
+ addEventListener('pagehide',()=>{cancelled=true;frames.forEach(f=>f.close());frames=[];releaseExtractor()},{once:true});
 })();
 
 load();setInterval(load,30000);setInterval(updateIdleCountdown,1000);

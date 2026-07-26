@@ -91,6 +91,14 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('target=clamp(scrollY/max,0,1);',DASHBOARD_HTML)
   self.assertNotIn('target=reduced?0:',DASHBOARD_HTML)
   self.assertIn('@media(prefers-reduced-motion:reduce)',DASHBOARD_HTML)
+ def test_mobile_scroll_video_uses_memory_safe_transactional_frames(self):
+  self.assertIn("mobile?Math.min(48",DASHBOARD_HTML)
+  self.assertIn("maxWidth=mobile?640:1280",DASHBOARD_HTML)
+  self.assertIn("const extracted=[]",DASHBOARD_HTML)
+  self.assertIn("extracted.forEach(f=>f.close());frames=[]",DASHBOARD_HTML)
+  self.assertIn("setMode('video-fallback')",DASHBOARD_HTML)
+  self.assertIn("addEventListener('touchstart',unlockFallback",DASHBOARD_HTML)
+  self.assertIn("frames=extracted;releaseExtractor();",DASHBOARD_HTML)
 
  def test_mobile_topbar_fits_four_links(self):
   self.assertIn('.topbar .rail-item{flex-direction:row;gap:6px;padding:9px 6px;font-size:11.5px',DASHBOARD_HTML)
