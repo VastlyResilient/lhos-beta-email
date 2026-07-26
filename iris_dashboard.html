@@ -236,6 +236,10 @@ h1 em{font-style:italic;font-weight:400}
  .tl-num{width:46px;height:46px;font-size:16px}
  .tl-step:not(:last-child)::before{left:22px}
 }
+@media(max-width:390px){
+ .topbar nav{gap:3px}
+ .topbar .rail-item{padding-inline:5px}
+}
 @media(max-width:760px){.spacer{height:28vh}}
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{animation:none!important;transition:none!important}
@@ -465,16 +469,32 @@ function timeET(iso){return new Date(iso).toLocaleTimeString([],{hour:'numeric',
 
 /* ---------- scroll spy ---------- */
 const SECTION_TITLES={overview:'Overview',systems:'Core Systems',edition:'Today’s Edition',ahead:'Advance Awareness'};
+const START_SECTION=SECTIONS.includes(location.hash.slice(1))?location.hash.slice(1):null;
 function setActive(h){
  document.querySelectorAll('.wallpaper div').forEach(w=>w.classList.toggle('on',w.dataset.wp===h));
  document.querySelectorAll('[data-nav]').forEach(a=>{const on=a.dataset.nav===h;if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
  document.title=`IRIS Health · ${SECTION_TITLES[h]}`;
  if(('#'+h)!==location.hash)history.replaceState(null,'','#'+h);
 }
+function scrollToSection(h,smooth=true){
+ const target=$('page-'+h);
+ if(!target)return;
+ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ target.scrollIntoView({behavior:smooth&&!reduceMotion?'smooth':'auto',block:'start'});
+}
+document.querySelectorAll('[data-nav]').forEach(a=>a.addEventListener('click',event=>{
+ const h=a.dataset.nav;
+ if(!SECTIONS.includes(h))return;
+ event.preventDefault();
+ if(location.hash!=='#'+h)history.pushState(null,'','#'+h);
+ scrollToSection(h);
+}));
+addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(SECTIONS.includes(h))scrollToSection(h)});
 const spy=new IntersectionObserver(entries=>{
  entries.forEach(e=>{if(e.isIntersecting)setActive(e.target.dataset.section)});
 },{threshold:.35});
 document.querySelectorAll('section.page').forEach(sec=>spy.observe(sec));
+if(START_SECTION)requestAnimationFrame(()=>scrollToSection(START_SECTION,false));
 
 /* ---------- render ---------- */
 function render(d){
