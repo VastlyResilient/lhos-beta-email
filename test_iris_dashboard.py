@@ -18,21 +18,35 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('aria-current="page"',DASHBOARD_HTML)
   self.assertIn('LIVE',DASHBOARD_HTML)
  def test_v2_liquid_glass_system(self):
+  import re as _re
   self.assertIn('.liquid-glass{',DASHBOARD_HTML)
   self.assertIn('.liquid-glass::before',DASHBOARD_HTML)
-  self.assertIn('.liquid-glass::after',DASHBOARD_HTML)
   self.assertIn('.liquid-glass--primary',DASHBOARD_HTML)
-  import re as _re
-  blur=_re.search(r'--iris-blur:(\d+)px',DASHBOARD_HTML)
-  self.assertTrue(blur and int(blur.group(1))>=28,'backdrop blur must stay >=28px')
-  # glass must stay genuinely translucent so the wallpaper reads through
-  fills=[float(a) for a in _re.findall(r'\.liquid-glass\{[^}]*?rgba\(\d+,\d+,\d+,\.(\d+)\)',DASHBOARD_HTML)]
-  alphas=_re.findall(r'rgba\(\d+,\s*\d+,\s*\d+,\.(\d{2})\)',DASHBOARD_HTML.split('.liquid-glass{')[1].split('}')[0])
-  self.assertTrue(all(int(a)<=45 for a in alphas),f'base glass fill too opaque: {alphas}')
-  self.assertIn('saturate(190%)',DASHBOARD_HTML)
   self.assertIn('@supports not ((backdrop-filter:blur(1px))',DASHBOARD_HTML)
   self.assertIn('.glass-pill',DASHBOARD_HTML)
   self.assertIn('.icon-tile{',DASHBOARD_HTML)
+  # brief: dark, thin, wallpaper-readable glass — blur 10-16px, saturation 110-125%
+  blurs=[int(b) for b in _re.findall(r'blur\((\d+)px\) saturate\((\d+)%\)',DASHBOARD_HTML) for b in b]
+  self.assertTrue(blurs,'no glass blur rules found')
+  base=_re.search(r'\.liquid-glass\{[^}]+',DASHBOARD_HTML).group(0)
+  self.assertIn('rgba(6,13,28',base)
+  fills=[int(a) for a in _re.findall(r'rgba\(6,13,28,\.(\d+)\)',base)]
+  self.assertTrue(all(18<=a<=24 for a in fills),f'base fill out of brief range: {fills}')
+  self.assertIn('blur(13px) saturate(118%)',base)
+  primary=_re.search(r'\.liquid-glass--primary\{[^}]+',DASHBOARD_HTML).group(0)
+  pfills=[int(a) for a in _re.findall(r'rgba\(6,13,28,\.(\d+)\)',primary)]
+  self.assertTrue(all(26<=a<=32 for a in pfills),f'primary fill out of range: {pfills}')
+ def test_v2_deterministic_inter_font(self):
+  from pathlib import Path as _P
+  self.assertIn("@font-face{font-family:'Inter'",DASHBOARD_HTML)
+  self.assertIn('/assets/fonts/inter-var.woff2',DASHBOARD_HTML)
+  self.assertIn('/assets/fonts/inter-var-italic.woff2',DASHBOARD_HTML)
+  self.assertIn("font-weight:100 900",DASHBOARD_HTML)
+  for f in ('inter-var.woff2','inter-var-italic.woff2'):
+   fp=_P('/Users/bobby/lhos-beta-email/assets/fonts')/f
+   self.assertTrue(fp.exists() and fp.stat().st_size>100000,str(fp))
+  self.assertNotIn('fonts.googleapis.com',DASHBOARD_HTML)
+  self.assertNotIn('fonts.gstatic.com',DASHBOARD_HTML)
  def test_v2_four_sections_and_wallpapers(self):
   for section in ('overview','systems','edition','ahead'):
    self.assertIn(f'data-section="{section}"',DASHBOARD_HTML)

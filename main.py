@@ -895,7 +895,7 @@ def iris_assets(file_path:str):
     target=(ASSETS_DIR/file_path).resolve()
     if not str(target).startswith(str(ASSETS_DIR)+"/") or not target.is_file():
         return JSONResponse({"error":"not found"},status_code=404)
-    if target.suffix.lower() not in {".webp",".png",".svg",".jpg",".jpeg",".avif"}:
+    if target.suffix.lower() not in {".webp",".png",".svg",".jpg",".jpeg",".avif",".woff2"}:
         return JSONResponse({"error":"not found"},status_code=404)
     response=FileResponse(target)
     response.headers["Cache-Control"]="public, max-age=86400, immutable"

@@ -17,7 +17,7 @@ class SecurityTests(unittest.TestCase):
   page=self.c.get('/iris-health')
   self.assertEqual(page.status_code,200);self.assertIn('IRIS',page.text);self.assertIn('Today',page.text)
   csp=page.headers.get('content-security-policy','');self.assertIn("default-src 'self'",csp);self.assertIn('d8j0ntlcm91z4.cloudfront.net',csp);self.assertNotIn('onlinewebfonts.com',csp)
-  for path in ('/assets/wallpaper-overview.webp','/assets/icons/iris-eye.svg'):
+  for path in ('/assets/wallpaper-overview.webp','/assets/icons/iris-eye.svg','/assets/fonts/inter-var.woff2','/assets/icons/raster/pulse-128.png'):
    asset=self.c.get(path);self.assertEqual(asset.status_code,200,path);self.assertIn('noindex',asset.headers.get('x-robots-tag',''))
   traversal=self.c.get('/assets/..%2F..%2Fmain.py');self.assertIn(traversal.status_code,(400,404,422))
   blocked=self.c.get('/assets/secret.txt');self.assertEqual(blocked.status_code,404)
