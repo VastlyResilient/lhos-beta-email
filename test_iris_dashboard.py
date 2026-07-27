@@ -113,8 +113,14 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn(".ov-grid>.card:not(.ov-health):not(.ov-api){display:grid",DASHBOARD_HTML)
 
  def test_mobile_topbar_fits_four_links(self):
-  self.assertIn('.topbar .rail-item{flex-direction:row;gap:6px;padding:9px 6px;font-size:11.5px',DASHBOARD_HTML)
-  self.assertIn('.topbar nav{display:flex;gap:4px;flex:1;overflow-x:auto',DASHBOARD_HTML)
+  self.assertIn('.rail-item{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center',DASHBOARD_HTML)
+  self.assertIn('.topbar .rail-item{flex-direction:row;justify-content:center;text-align:center;gap:6px;padding:9px 6px;font-size:11.5px',DASHBOARD_HTML)
+  self.assertIn('.topbar nav{display:flex;justify-content:safe center;gap:4px;flex:1;overflow-x:auto',DASHBOARD_HTML)
+  self.assertIn('@media(max-width:390px){\n .topbar nav{justify-content:flex-start;gap:3px}',DASHBOARD_HTML)
+  self.assertIn('.rail-live{display:flex;align-items:center;justify-content:center;text-align:center',DASHBOARD_HTML)
+  self.assertIn("topNav.scrollTo({left:Math.max(0,left),behavior:'smooth'})",DASHBOARD_HTML)
+ def test_mobile_overview_icons_center_against_heading_and_value(self):
+  self.assertIn('.card-head .icon-tile{grid-column:1;grid-row:1/3;align-self:center}',DASHBOARD_HTML)
  def test_navigation_scrolls_to_page_sections(self):
   self.assertIn("target=$('page-'+h)",DASHBOARD_HTML)
   self.assertIn("scrollIntoView({behavior:",DASHBOARD_HTML)
