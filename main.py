@@ -141,24 +141,31 @@ def save_log(log: list):
 # Google API helpers
 # ---------------------------------------------------------------------------
 
-def get_google_access_token() -> str:
-    """Refresh and return a valid Google access token using the refresh token."""
-    if not GOOGLE_REFRESH_TOKEN or not GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Google credentials not configured.")
+def _google_auth_error(category: str, message: str, *, retryable: bool=False) -> HTTPException:
+    """Return a safe, structured connector error without provider bodies or secrets."""
+    return HTTPException(status_code=503,detail={"category":category,"message":message,"retryable":retryable})
 
-    resp = httpx.post(
-        "https://oauth2.googleapis.com/token",
-        data={
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_CLIENT_SECRET,
-            "refresh_token": GOOGLE_REFRESH_TOKEN,
-            "grant_type": "refresh_token",
-        },
-        timeout=30,
-    )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Google token refresh failed: {resp.text}")
-    return resp.json()["access_token"]
+def get_google_access_token() -> str:
+    """Refresh and return a Google access token, classifying failures safely."""
+    if not GOOGLE_REFRESH_TOKEN or not GOOGLE_CLIENT_ID:
+        raise _google_auth_error("configuration_missing","Google OAuth credentials are not configured in production.")
+    try:
+        resp=httpx.post("https://oauth2.googleapis.com/token",data={"client_id":GOOGLE_CLIENT_ID,"client_secret":GOOGLE_CLIENT_SECRET,"refresh_token":GOOGLE_REFRESH_TOKEN,"grant_type":"refresh_token"},timeout=30)
+    except httpx.HTTPError:
+        raise _google_auth_error("provider_temporary","Google's token service could not be reached; scheduled checks will retry.",retryable=True)
+    if resp.status_code!=200:
+        try:payload=resp.json()
+        except ValueError:payload={}
+        if not isinstance(payload,dict):payload={}
+        code=str(payload.get("error") or "").lower()
+        if code=="invalid_grant":raise _google_auth_error("reconsent_required","Google authorization expired or was revoked; human re-consent is required.")
+        if code in ("invalid_client","unauthorized_client"):raise _google_auth_error("configuration_error","Google rejected the OAuth client configuration; verify the production client credentials.")
+        if resp.status_code==429 or resp.status_code>=500:raise _google_auth_error("provider_temporary","Google's token service is temporarily unavailable; scheduled checks will retry.",retryable=True)
+        raise _google_auth_error("refresh_failed",f"Google rejected the token refresh (HTTP {resp.status_code}).")
+    try:token=resp.json().get("access_token")
+    except Exception:token=None
+    if not token:raise _google_auth_error("provider_response_invalid","Google's token service returned an unusable response; scheduled checks will retry.",retryable=True)
+    return token
 
 def _decode_header(value: str) -> str:
     try: return str(make_header(decode_header(value or "")))
@@ -869,9 +876,11 @@ def _google_dashboard_check():
         for name,url,params in probes:
             r=httpx.get(url,headers=headers,params=params,timeout=12)
             if r.status_code!=200:failed.append(f"{name} HTTP {r.status_code}")
-        value={"google":"red" if failed else "green","detail":("Live OAuth refresh succeeded; Gmail, Drive, and Contacts answered." if not failed else "Google refresh succeeded, but "+", ".join(failed)+"."),"checked_at":checked}
-    except Exception as exc:
-        value={"google":"red","detail":f"Live Google authorization check failed ({type(exc).__name__}).","checked_at":checked}
+        value={"google":"red" if failed else "green","category":"connector_probe_failed" if failed else "verified","detail":("Live OAuth refresh succeeded; Gmail, Drive, and Contacts answered." if not failed else "Google refresh succeeded, but "+", ".join(failed)+"."),"checked_at":checked}
+    except HTTPException as exc:
+        detail=exc.detail if isinstance(exc.detail,dict) else {};value={"google":"red","category":detail.get("category") or "refresh_failed","detail":detail.get("message") or "Live Google authorization check failed.","retryable":bool(detail.get("retryable")),"checked_at":checked}
+    except Exception:
+        value={"google":"red","category":"probe_failed","detail":"Live Google connector verification failed unexpectedly.","retryable":True,"checked_at":checked}
     _DASHBOARD_CONNECTOR_CACHE.update({"monotonic":now_mono,"value":value});return value
 
 def _iris_health_snapshot():

@@ -425,35 +425,55 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             created=create_draft(subject,email_html,raw,date_display);did=created["draft_id"];approval=approve_draft(did,"Bobby explicit late-send authorization",manual_override=True)
             st=state_all();state={"date":date_key,"date_display":date_display,"stage":"approved","content_valid":True,"draft_id":did,"subject":subject,"source":meta,"raw_content":raw,"approved_by":"Bobby","approval_channel":"explicit chat authorization","approved_at":now_et().isoformat(),"manual_override":True,"updated_at":now_et().isoformat()};st[date_key]=state;save_state(st)
             result=send_draft(did,"Bobby explicit late-send authorization");state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st=state_all();st[date_key]=state;save_state(st);return {"action":"manual_send_executed","draft_id":did,"approval":approval,**result}
-    def notify_not_sent(date_key,date_display,state,reason,token,dry_run):
+    def record_not_sent(date_key,date_display,state,reason):
+        """Persist the failed-closed business outcome before touching Gmail.
+
+        Connector failures must never erase the fact that no beta edition was sent.
+        """
+        st=state_all();base=dict(state or {"date":date_key,"date_display":date_display,"content_valid":False})
+        if base.get("stage") in ("sent","sent_external","sending","partial"):
+            return base
+        stamp=now_et().isoformat();base.update({"stage":"not_sent","not_sent_reason":reason,"not_sent_at":base.get("not_sent_at") or stamp,"updated_at":stamp});st[date_key]=base;save_state(st);return base
+    def notify_not_sent(date_key,date_display,state,reason,dry_run):
         subject=f"[NOT SENT] LifeHouse OS beta update - {date_display}"
         if dry_run:return {"action":"would_notify_not_sent","reason":reason,"stage":state.get("stage") if state else None}
-        if not gmail_subject_sent_any(token,subject,date_key):
-            body=f"<p>Hi Bobby,</p><p>Today's LifeHouse OS beta email was <strong>not sent</strong> at 3:00 PM Eastern.</p><p>{html.escape(reason)}</p><p>No beta tester received an email.</p><p>Warm regards,<br>Iris</p>";send_email(token,ALERT_EMAIL,subject,body,sender_email,sender_name)
-        st=state_all();base=state or {"date":date_key,"date_display":date_display,"content_valid":False};base.update({"stage":"not_sent","not_sent_reason":reason,"not_sent_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=base;save_state(st);return {"action":"not_sent","reason":reason}
+        base=record_not_sent(date_key,date_display,state,reason);notification="already_sent"
+        try:
+            token=get_token()
+            if not gmail_subject_sent_any(token,subject,date_key):
+                body=f"<p>Hi Bobby,</p><p>Today's LifeHouse OS beta email was <strong>not sent</strong> at 3:00 PM Eastern.</p><p>{html.escape(reason)}</p><p>No beta tester received an email.</p><p>Warm regards,<br>Iris</p>";send_email(token,ALERT_EMAIL,subject,body,sender_email,sender_name);notification="sent"
+        except Exception as exc:
+            notification="failed";base["not_sent_notification_error"]=type(exc).__name__
+        base["not_sent_notification"]=notification;base["updated_at"]=now_et().isoformat();st=state_all();st[date_key]=base;save_state(st)
+        return {"action":"not_sent","reason":reason,"notification":notification}
     @router.post("/auto-send")
     async def auto_send(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
             heartbeat("auto_send")
             if now_et().hour < 15:return {"action":"too_early","scheduled_for":"15:00 America/New_York"}
-            date_key,date_display=current();st=state_all();state=st.get(date_key);token=get_token()
-            if not state:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",token,dry_run)
+            date_key,date_display=current();st=state_all();state=st.get(date_key)
+            if not state:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",dry_run)
+            if state.get("stage")=="not_sent":return {"action":"daily_complete","stage":"not_sent"}
+            if state.get("stage") in ("sending","partial"):return {"action":"reconciliation_pending","stage":state.get("stage")}
             drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
             if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
             if draft.get('status')=='approved' and state.get('content_valid'):
                 state['stage']='approved';st[date_key]=state;save_state(st)
             if state.get('stage')!='approved' or draft.get('status')!='approved' or not state.get('content_valid'):
                 reason=("No authorized approver gave clear final approval." if state.get('content_valid') else "The dated source was missing or invalid.")+(f" Send policy in effect: {SEND_POLICY}." if SEND_POLICY=="ON_APPROVAL" else "")
-                return notify_not_sent(date_key,date_display,state,reason,token,dry_run)
+                return notify_not_sent(date_key,date_display,state,reason,dry_run)
             if dry_run:return {"action":"would_send_approved","draft_id":state.get('draft_id'),"approved_by":draft.get('approved_by')}
             result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return result
     @router.post("/reconcile")
     async def reconcile(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            heartbeat("reconcile");date_key,_=current();st=state_all();state=st.get(date_key)
-            if not state:return {"action":"no_state"}
+            heartbeat("reconcile");date_key,date_display=current();st=state_all();state=st.get(date_key)
+            if not state:
+                if now_et().hour>=15:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",dry_run)
+                return {"action":"no_state"}
+            if state.get("stage")=="not_sent":return {"action":"daily_complete","stage":"not_sent"}
             drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
             if draft.get("status")=="sent":
                 state["stage"]="sent";state["updated_at"]=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
@@ -468,6 +488,9 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         with automation_lock():
             heartbeat("close_out");date_key,date_display=current();state=state_all().get(date_key) or {};reports=load(REPORTS_FILE,{})
             if reports.get(date_key) and not dry_run:return {"action":"already_reported","date":date_key,"stage":reports[date_key].get("stage")}
+            if not state and now_et().hour>=15:
+                reason="No dated content or review state was available by the 3:00 PM deadline."
+                state=({"date":date_key,"date_display":date_display,"content_valid":False,"stage":"not_sent","not_sent_reason":reason} if dry_run else record_not_sent(date_key,date_display,None,reason))
             stage=state.get("stage") or "no_state";ledger={}
             try:
                 led=load(DATA_DIR/"delivery_ledger.json",{});ledger=led.get(date_key) or led.get(state.get("draft_id"),{}) or {}
@@ -496,10 +519,12 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             reports[date_key]={"stage":stage,"terminal":terminal,"counts":counts,"incident":incident,"reported_at":now_et().isoformat()};atomic_json_write(REPORTS_FILE,reports)
             return {"action":"report_sent","stage":stage,"terminal":terminal,"counts":counts,"incident":incident}
     @router.post("/watchdog")
-    async def watchdog(req:Request,dry_run:bool=False):
+    async def watchdog(req:Request,dry_run:bool=False,source:str="cloud"):
         auth(req)
         with automation_lock():
-            heartbeat("watchdog");date_key,date_display=current();now=now_et();state=state_all().get(date_key);hb=load(HEARTBEAT_FILE,{});reason=None
+            source="core" if source.lower()=="core" else "cloud";heartbeat(f"watchdog_{source}")
+            if source=="cloud":heartbeat("watchdog")  # backward-compatible independent-cloud evidence
+            date_key,date_display=current();now=now_et();state=state_all().get(date_key);hb=load(HEARTBEAT_FILE,{});reason=None
             if now.hour < 7:return {"action":"too_early","time":now.isoformat()}
             if 7 <= now.hour < 15:
                 if state and state.get("stage") in ("sent","sent_external"):return {"action":"healthy_or_expected_terminal_state","stage":state.get("stage")}

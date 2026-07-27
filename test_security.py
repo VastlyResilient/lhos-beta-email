@@ -70,4 +70,19 @@ class SecurityTests(unittest.TestCase):
   page=self.c.get(f"/lhos/approve/{d['draft_id']}?token={tok}");self.assertEqual(page.status_code,200);self.assertIn('reply directly to the review email',page.text)
   approve=self.c.post(f"/api/lhos/approve/{d['draft_id']}?token={tok}",json={});self.assertEqual(approve.status_code,403)
   edit=self.c.post(f"/api/lhos/drafts/{d['draft_id']}/edit?token={tok}",json={'subject':'x','html_body':'y'});self.assertEqual(edit.status_code,403)
+
+ def test_google_invalid_grant_is_sanitized_and_actionable(self):
+  class Resp:
+   status_code=400
+   text='{"error":"invalid_grant","error_description":"SECRET PROVIDER BODY"}'
+   def json(self):return {"error":"invalid_grant","error_description":"Token has been expired or revoked."}
+  with patch.object(self.main,'GOOGLE_CLIENT_ID','cid'),patch.object(self.main,'GOOGLE_CLIENT_SECRET','secret'),patch.object(self.main,'GOOGLE_REFRESH_TOKEN','refresh'),patch.object(self.main.httpx,'post',return_value=Resp()):
+   with self.assertRaises(HTTPException) as cm:self.main.get_google_access_token()
+  self.assertEqual(cm.exception.detail['category'],'reconsent_required');self.assertNotIn('SECRET PROVIDER BODY',str(cm.exception.detail))
+ def test_dashboard_preserves_sanitized_google_failure_category(self):
+  err=HTTPException(status_code=503,detail={"category":"reconsent_required","message":"Google authorization expired or was revoked; human re-consent is required."})
+  self.main._DASHBOARD_CONNECTOR_CACHE.update({"monotonic":0.0,"value":None})
+  with patch.object(self.main,'get_google_access_token',side_effect=err):out=self.main._google_dashboard_check()
+  self.assertEqual(out['google'],'red');self.assertEqual(out['category'],'reconsent_required');self.assertIn('re-consent',out['detail'].lower());self.assertNotIn('httpexception',out['detail'].lower())
+
 if __name__=='__main__':unittest.main()

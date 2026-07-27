@@ -11,6 +11,8 @@ Bounded by design:
   * escalates instead of guessing when the cause is unknown
 """
 import json,os,sys,time,urllib.request,urllib.error
+sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from watchdog_status import google_workspace_outage,instatus_outage,github_statuspage_outage
 
 N8N=os.environ["N8N_BASE_URL"].rstrip("/")
 N8N_KEY=os.environ["N8N_API_KEY"]
@@ -82,26 +84,19 @@ GOOGLE_REFRESH_TOKEN=os.environ.get("GOOGLE_REFRESH_TOKEN","").strip()
 GH_BILLING_TOKEN=os.environ.get("GH_BILLING_TOKEN","").strip()
 
 def provider_outage(symptom):
-    """Before paging a human, check whether the symptom matches a CONFIRMED provider
-    outage. If so, the correct action is silent retry + auto-resume, not a page."""
-    import json as _j
-    checks={"railway":"https://status.railway.com/api/v2/status.json",
-            "github":"https://www.githubstatus.com/api/v2/status.json"}
-    domain={"n8n":"railway","backend":"railway","railway":"railway",
-            "gmail":"google","drive":"google","google":"google"}[symptom]
+    """Return only schema-verified, confirmed provider outages.
+
+    Unknown/HTML/changed responses fail open so a real LHOS alert is never suppressed.
+    """
+    domain={"n8n":"railway","backend":"railway","railway":"railway","gmail":"google","drive":"google","google":"google"}[symptom]
     if domain=="google":
-        st,r=http("https://www.google.com/appsstatus/json/en",timeout=15)
-        if st==200 and isinstance(r,list):
-            for svc in r:
-                nm=(svc.get("service_name") or "").lower()
-                if any(k in nm for k in ("gmail","drive","calendar")) and svc.get("status") not in ("AVAILABLE",None):
-                    return f"Google Workspace outage ({svc.get('service_name')}: {svc.get('status')})"
-        return None
-    st,r=http(checks[domain],timeout=15)
-    if st==200 and isinstance(r,dict):
-        ind=((r.get("status") or {}).get("indicator") or "none")
-        if ind in ("major","critical"):return f"{domain.title()} outage (statuspage: {ind})"
-    return None
+        st,payload=http("https://www.google.com/appsstatus/dashboard/incidents.json",timeout=15)
+        return google_workspace_outage(payload) if st==200 else None
+    if domain=="railway":
+        st,payload=http("https://railway.instatus.com/summary.json",timeout=15)
+        return instatus_outage(payload) if st==200 else None
+    st,payload=http("https://www.githubstatus.com/api/v2/status.json",timeout=15)
+    return github_statuspage_outage(payload) if st==200 else None
 
 def oauth_canary():
     """The refresh token is the one credential that dies SILENTLY (revocation,
@@ -299,7 +294,7 @@ if stale and st==200 and wf.get("active"):
         escalate.append(f"Reactivation cycle failed (deactivate={d1}, activate={a1}): {str(ab)[:200]}")
 
 # ---------- 5. Let the backend run its own state audit (it may email an alert) ----------
-wst,wb=backend("/api/lhos/automation/watchdog")
+wst,wb=backend("/api/lhos/automation/watchdog?source=cloud")
 log(f"backend watchdog -> HTTP {wst} {str(wb)[:180]}")
 
 # ---------- 6. Dead-man's-switch signalling ----------

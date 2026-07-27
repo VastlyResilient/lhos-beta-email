@@ -82,17 +82,24 @@ def _scheduler(now,heartbeat,state):
 
 
 def _watchdog(now,heartbeat):
-    stamp=heartbeat.get("watchdog");age=_age_minutes(stamp,now)
-    if age is None:return _item("orange","Awaiting cloud check evidence","The dashboard has not yet recorded a cloud-watchdog heartbeat. No failure is being inferred.")
-    if age<=30:return _item("green","Cloud watchdog online",f"The independent watchdog checked in {_age_label(stamp,now)}.",stamp)
+    core=heartbeat.get("watchdog_core");cloud=heartbeat.get("watchdog_cloud") or heartbeat.get("watchdog")
+    core_age=_age_minutes(core,now);cloud_age=_age_minutes(cloud,now)
+    if core_age is not None:
+        cloud_detail=(f"independent cloud backup checked in {_age_label(cloud,now)}" if cloud_age is not None else "independent cloud backup evidence is pending")
+        if core_age<=25:
+            item=_item("green","Layered watchdog online",f"The core 10-minute watchdog checked in {_age_label(core,now)}; {cloud_detail}.",core);item["mode"]="layered" if cloud_age is not None else "core_only";return item
+        if core_age<=45 or (cloud_age is not None and cloud_age<=90):
+            item=_item("orange","Watchdog coverage is delayed",f"The core check is {int(core_age)} minutes old; {cloud_detail}. No pipeline failure is inferred.",core);item["mode"]="coverage_gap";return item
+        if _is_rest_window(now):
+            item=_item("orange","Overnight watchdog evidence delayed",f"The core check is {int(core_age)} minutes old; {cloud_detail}.",core);item["mode"]="overnight";return item
+        return _item("red","Watchdog coverage is stale",f"The core check is {int(core_age)} minutes old and no timely independent backup evidence is available.",core)
+    stamp=cloud;age=cloud_age
+    if age is None:return _item("orange","Awaiting watchdog evidence","No core or independent-cloud watchdog heartbeat is recorded. No pipeline failure is being inferred.")
+    if age<=30:return _item("green","Cloud watchdog online",f"The independent watchdog checked in {_age_label(stamp,now)}; core 10-minute evidence is pending.",stamp)
     if age<=90:
-        item=_item("green","Cloud check within normal grace",f"The last cloud check was {int(age)} minutes ago. Hosted schedules can drift; no action is needed.",stamp)
-        item["mode"]="grace"
-        return item
+        item=_item("green","Cloud check within normal grace",f"The last cloud check was {int(age)} minutes ago. Hosted schedules can drift; no action is needed.",stamp);item["mode"]="grace";return item
     if _is_rest_window(now):
-        item=_item("orange","Overnight cloud check delayed",f"The last independent cloud check was {int(age)} minutes ago; core services are verified separately.",stamp)
-        item["mode"]="overnight"
-        return item
+        item=_item("orange","Overnight cloud check delayed",f"The last independent cloud check was {int(age)} minutes ago; core services are verified separately.",stamp);item["mode"]="overnight";return item
     if age<=180:return _item("orange","Cloud check overdue",f"The last cloud check was {int(age)} minutes ago. No outage is confirmed; the hosted scheduler will retry automatically.",stamp)
     return _item("red","Cloud watchdog is stale",f"No cloud-watchdog heartbeat has arrived for {int(age)} minutes during the active window.",stamp)
 
@@ -141,17 +148,22 @@ def build_snapshot(*,now,state,heartbeat,connectors,reports,alerts):
     if google_light=="green":
         awareness.append(_item("green","Google token refresh is automatic","A live refresh succeeded. Do not add a replacement token unless this check turns red and automated recovery cannot restore it."))
         awareness.append(_item("green","Token timing is evidence-based","Google does not expose a reliable refresh-token expiration date here. IRIS reports real refresh success instead of inventing a countdown."))
-    else:awareness.append(_item("red","Google authorization needs attention","The live refresh or connector check failed. Self-healing is already retrying; manual re-consent is needed only if recovery remains red."))
+    else:
+        category=connectors.get("category")
+        if category=="reconsent_required":awareness.append(_item("red","Google re-consent is required","Google reports that Iris's authorization expired or was revoked. Automatic retries cannot replace human consent."))
+        elif connectors.get("retryable"):awareness.append(_item("red","Google connector retry is scheduled","The live check failed transiently. Scheduled connector checks will retry; no claim of automatic credential repair is being made."))
+        elif category in ("configuration_missing","configuration_error"):awareness.append(_item("red","Google OAuth configuration needs attention","The production OAuth client configuration must be corrected before connector checks can recover."))
+        else:awareness.append(_item("red","Google connection needs attention","The live refresh or a scoped connector probe failed. The diagnostic above identifies the failing layer."))
     if edition["stage"]=="hold":awareness.append(_item("orange","Today’s source is still pending",f"IRIS is looking for {edition['source']} every minute until 2:59 PM ET. No system repair is needed."))
     wd=systems["watchdog"]
     if wd.get("mode")=="grace":awareness.append(_item("green","Hosted schedule within normal grace","The latest cloud check is delayed but still within its no-action window."))
-    elif wd["light"]=="green":awareness.append(_item("green","Self-healing loop is armed","The independent cloud watchdog is checking health. It repairs known n8n and Railway failures before escalating."))
+    elif wd["light"]=="green":awareness.append(_item("green","Watchdog coverage is armed","The core check runs every 10 minutes; the independent cloud watchdog verifies and performs only bounded, pre-approved repairs before escalation."))
     elif wd.get("mode")=="overnight":awareness.append(_item("orange","Overnight monitoring continues","A hosted cloud check is delayed; the API and Google connection remain independently verified."))
     elif wd["light"]=="orange":awareness.append(_item("orange","Next cloud check pending","No action is needed yet. The hosted scheduler will retry automatically."))
     else:awareness.append(_item("red","Cloud self-healing evidence is stale","The independent watchdog has not checked in within its safe window."))
     latest_report=None
     if reports:
         key=max(reports);r=reports.get(key) or {};latest_report={"date":key,"stage":r.get("stage"),"terminal":r.get("terminal"),"reported_at":r.get("reported_at")}
-    return {"generated_at":now.isoformat(),"timezone":"America/New_York","overall":_overall(systems,now),"systems":systems,"edition":edition,"awareness":awareness,"last_outcome":latest_report,"policy":{"cutoff":"3:00 PM ET","content_polling":"Every minute, 7:00 AM–2:59 PM ET","reply_polling":"Every minute, 7:00 AM–2:59 PM ET","send_policy":"Immediately after valid approval","alerts":"Bobby only","imessage":"Disabled"}}
+    return {"generated_at":now.isoformat(),"timezone":"America/New_York","overall":_overall(systems,now),"systems":systems,"edition":edition,"awareness":awareness,"last_outcome":latest_report,"policy":{"cutoff":"3:00 PM ET","content_polling":"Every minute, 7:00 AM–2:59 PM ET","reply_polling":"Every minute, 7:00 AM–2:59 PM ET","send_policy":"After exact-draft approval: authenticated replies may send immediately; signed web approval sends at the 3 PM gate","alerts":"Bobby only","imessage":"Disabled"}}
 
 DASHBOARD_HTML=Path(__file__).with_name("iris_dashboard.html").read_text(encoding="utf-8")

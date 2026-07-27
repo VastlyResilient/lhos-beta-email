@@ -241,4 +241,20 @@ class IrisDashboardHealthTests(unittest.TestCase):
   s=self.snap(now=now,state={"stage":"hold","content_valid":False},heartbeat={"prepare":fresh,"check_replies":fresh})
   self.assertEqual(s["systems"]["watchdog"]["light"],"orange")
 
+
+ def test_invalid_grant_requires_reconsent_without_self_healing_claim(self):
+  now=datetime(2026,7,25,11,0,tzinfo=ET);fresh=(now-timedelta(seconds=20)).isoformat()
+  s=self.snap(now=now,state={"stage":"review_sent","content_valid":True},heartbeat={"prepare":fresh,"check_replies":fresh,"watchdog_core":fresh,"watchdog_cloud":fresh},connectors={"google":"red","category":"reconsent_required","detail":"Google authorization expired or was revoked."})
+  text=' '.join(x["label"]+' '+x["detail"] for x in s["awareness"])
+  self.assertIn('re-consent',text.lower());self.assertNotIn('self-healing is already retrying',text.lower())
+ def test_send_policy_copy_matches_channel_specific_behavior(self):
+  s=self.snap()
+  self.assertIn('exact-draft approval',s['policy']['send_policy'].lower())
+  self.assertIn('3 pm',s['policy']['send_policy'].lower())
+  self.assertNotEqual(s['policy']['send_policy'],'Immediately after valid approval')
+ def test_layered_watchdog_reports_core_and_cloud_evidence(self):
+  now=datetime(2026,7,25,11,0,tzinfo=ET);core=(now-timedelta(minutes=2)).isoformat();cloud=(now-timedelta(minutes=80)).isoformat();fresh=(now-timedelta(seconds=20)).isoformat()
+  s=self.snap(now=now,state={"stage":"hold"},heartbeat={"prepare":fresh,"check_replies":fresh,"watchdog_core":core,"watchdog_cloud":cloud})
+  self.assertEqual(s['systems']['watchdog']['light'],'green');self.assertIn('core',s['systems']['watchdog']['detail'].lower());self.assertIn('cloud',s['systems']['watchdog']['detail'].lower())
+
 if __name__=='__main__':unittest.main()

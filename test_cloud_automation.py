@@ -8,10 +8,10 @@ class CloudTests(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.HEARTBEAT_FILE=root/'heartbeat.json';ca.REPORTS_FILE=root/'reports.json';ca.SEND_POLICY='ON_APPROVAL';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE='';ca.IMESSAGE_ENABLED=False;ca.ALERT_EMAIL='bobbyatf@gmail.com'
  def tearDown(self):self.t.cleanup()
- def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None):
+ def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None,get_token=lambda:'tok'):
   app=FastAPI(); drafts=dict(initial_drafts or {}); self._drafts=drafts
   def create(s,h,t,d):drafts['id']={'id':'id','subject':s,'html_body':h,'text_body':t,'date':d,'status':'pending_approval'};return {'draft_id':'id'}
-  app.include_router(ca.configure_router(get_token=lambda:'tok',send_email=send_email,create_draft=create,load_drafts=lambda:drafts,save_drafts=lambda d:None,send_draft=send_draft,approve_draft=approve_draft,approvers=['a@example.com'],approval_senders=['a@example.com'],public_url='https://x',sender_email='iris@example.com',sender_name='Iris'));return TestClient(app)
+  app.include_router(ca.configure_router(get_token=get_token,send_email=send_email,create_draft=create,load_drafts=lambda:drafts,save_drafts=lambda d:None,send_draft=send_draft,approve_draft=approve_draft,approvers=['a@example.com'],approval_senders=['a@example.com'],public_url='https://x',sender_email='iris@example.com',sender_name='Iris'));return TestClient(app)
  def test_deterministic_preserves_named_sections(self):
   raw=('Good day Beta Team\nSprint 2 Continues\nWe fixed the dashboard issue and added a new feature for testing. '*4+'\nYour One-Time Survey Opens Today\nPlease complete the survey and send feedback.')
   s=ca.deterministic_sections(raw);blob=' '.join(s.values());self.assertIn('Sprint 2 Continues',blob);self.assertIn('Survey Opens Today',blob)
@@ -46,6 +46,41 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'now_et',return_value=ca.datetime(2030,1,1,16,0,tzinfo=ca.ET)):
    r=self.app().post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
    self.assertEqual(r.json()['action'],'would_alert_bobby')
+
+ def test_auto_send_persists_no_source_before_google_notification_failure(self):
+  at=ca.now_et().replace(hour=15,minute=0,second=0,microsecond=0);date=at.strftime('%Y-%m-%d')
+  def dead_token():raise RuntimeError('invalid_grant')
+  with patch.object(ca,'now_et',return_value=at):
+   r=self.app(get_token=dead_token).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'not_sent')
+  state=ca.load(ca.STATE_FILE,{})[date];self.assertEqual(state['stage'],'not_sent');self.assertFalse(state['content_valid']);self.assertEqual(r.json()['notification'],'failed')
+ def test_reconcile_after_deadline_recovers_missing_terminal_state(self):
+  at=ca.now_et().replace(hour=15,minute=2,second=0,microsecond=0);date=at.strftime('%Y-%m-%d')
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_subject_sent_any',return_value=True):
+   r=self.app().post('/api/lhos/automation/reconcile',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'not_sent');self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['stage'],'not_sent')
+ def test_reconcile_before_deadline_does_not_create_terminal_state(self):
+  at=ca.now_et().replace(hour=14,minute=59,second=0,microsecond=0)
+  with patch.object(ca,'now_et',return_value=at):
+   r=self.app().post('/api/lhos/automation/reconcile',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'no_state');self.assertEqual(ca.load(ca.STATE_FILE,{}),{})
+ def test_watchdog_sources_have_separate_heartbeats(self):
+  at=ca.datetime(2030,1,1,10,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'hold','content_valid':False}});ca.atomic_json_write(ca.HEARTBEAT_FILE,{'prepare':at.isoformat()})
+  with patch.object(ca,'now_et',return_value=at):
+   r=self.app().post('/api/lhos/automation/watchdog?dry_run=true&source=core',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,200);hb=ca.load(ca.HEARTBEAT_FILE,{});self.assertEqual(hb['watchdog_core'],at.isoformat());self.assertNotIn('watchdog_cloud',hb)
+
+
+ def test_auto_send_never_overwrites_partial_delivery(self):
+  at=ca.now_et().replace(hour=15,minute=0,second=0,microsecond=0);date=at.strftime('%Y-%m-%d');state={"stage":"partial","content_valid":True,"draft_id":"id"};ca.atomic_json_write(ca.STATE_FILE,{date:state})
+  with patch.object(ca,'now_et',return_value=at):r=self.app(initial_drafts={"id":{"status":"partial","approved_by":"Kristina"}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'reconciliation_pending');self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['stage'],'partial')
+ def test_recovered_not_sent_state_is_idempotent(self):
+  at=ca.now_et().replace(hour=15,minute=2,second=0,microsecond=0);date=at.strftime('%Y-%m-%d');sent=[]
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+   app=self.app(send_email=lambda *a:sent.append(a));first=app.post('/api/lhos/automation/reconcile',headers={'x-lhos-automation-token':'secret'});second=app.post('/api/lhos/automation/reconcile',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(first.json()['action'],'not_sent');self.assertEqual(second.json()['action'],'daily_complete');self.assertEqual(len(sent),1);self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['stage'],'not_sent')
+
  def test_revision_persists_new_draft_and_supersedes_old(self):
   at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);date=at8.strftime('%Y-%m-%d');raw='Daily Beta Notes\nA concrete beta update describes testing and feedback from users.\nWhat Changed\nThe dashboard has a revised navigation flow with clearer labels.\nHelpful Reminder\nPlease continue testing and report any specific issue.\nThank You\nThank you for the detailed feedback and continued beta participation.'
   ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'July 23, 2026','stage':'review_sent','content_valid':True,'draft_id':'old','subject':'S','review_subject':'[REVIEW] S','raw_content':raw}})

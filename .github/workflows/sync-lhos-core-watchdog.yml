@@ -1,0 +1,23 @@
+name: Sync LHOS Core Watchdog
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
+      N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+      LHOS_WORKFLOW_ID: ${{ secrets.LHOS_WORKFLOW_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch and verify live n8n workflow
+        run: python scripts/sync_n8n_core_watchdog.py
