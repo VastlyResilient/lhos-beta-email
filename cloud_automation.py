@@ -238,7 +238,12 @@ def sender_authenticated(addr,payload):
 
 def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts,send_draft,approve_draft,approvers,approval_senders,public_url,sender_email,sender_name):
     router=APIRouter(prefix="/api/lhos/automation")
-    def state_all():return load(STATE_FILE,{})
+    def state_all():
+        if not STATE_FILE.exists():return {}
+        try:data=json.loads(STATE_FILE.read_text())
+        except Exception:raise HTTPException(status_code=503,detail={"category":"state_corrupt","message":"Automation state could not be read; writes and sends are blocked pending recovery."})
+        if not isinstance(data,dict):raise HTTPException(status_code=503,detail={"category":"state_corrupt","message":"Automation state has an invalid shape; writes and sends are blocked pending recovery."})
+        return data
     def heartbeat(name):
         h=load(HEARTBEAT_FILE,{});h[name]=now_et().isoformat();atomic_json_write(HEARTBEAT_FILE,h);return h
     def save_state(d):atomic_json_write(STATE_FILE,d)
@@ -450,21 +455,24 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def auto_send(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            heartbeat("auto_send")
+            heartbeat("auto_send_started")
             if now_et().hour < 15:return {"action":"too_early","scheduled_for":"15:00 America/New_York"}
+            def complete(result):
+                if not dry_run:heartbeat("auto_send")
+                return result
             date_key,date_display=current();st=state_all();state=st.get(date_key)
-            if not state:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",dry_run)
-            if state.get("stage")=="not_sent":return {"action":"daily_complete","stage":"not_sent"}
-            if state.get("stage") in ("sending","partial"):return {"action":"reconciliation_pending","stage":state.get("stage")}
+            if not state:return complete(notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",dry_run))
+            if state.get("stage")=="not_sent":return complete({"action":"daily_complete","stage":"not_sent"})
+            if state.get("stage") in ("sending","partial"):return complete({"action":"reconciliation_pending","stage":state.get("stage")})
             drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
-            if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return {"action":"already_sent"}
+            if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return complete({"action":"already_sent"})
             if draft.get('status')=='approved' and state.get('content_valid'):
                 state['stage']='approved';st[date_key]=state;save_state(st)
             if state.get('stage')!='approved' or draft.get('status')!='approved' or not state.get('content_valid'):
                 reason=("No authorized approver gave clear final approval." if state.get('content_valid') else "The dated source was missing or invalid.")+(f" Send policy in effect: {SEND_POLICY}." if SEND_POLICY=="ON_APPROVAL" else "")
-                return notify_not_sent(date_key,date_display,state,reason,dry_run)
+                return complete(notify_not_sent(date_key,date_display,state,reason,dry_run))
             if dry_run:return {"action":"would_send_approved","draft_id":state.get('draft_id'),"approved_by":draft.get('approved_by')}
-            result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return result
+            result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return complete(result)
     @router.post("/reconcile")
     async def reconcile(req:Request,dry_run:bool=False):
         auth(req)

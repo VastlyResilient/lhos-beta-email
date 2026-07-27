@@ -71,6 +71,20 @@ class SecurityTests(unittest.TestCase):
   approve=self.c.post(f"/api/lhos/approve/{d['draft_id']}?token={tok}",json={});self.assertEqual(approve.status_code,403)
   edit=self.c.post(f"/api/lhos/drafts/{d['draft_id']}/edit?token={tok}",json={'subject':'x','html_body':'y'});self.assertEqual(edit.status_code,403)
 
+
+ def test_google_api_failures_do_not_expose_provider_bodies(self):
+  class Resp:
+   status_code=403;text='PROVIDER_SECRET_BODY'
+   def json(self):return {"error":{"message":"PROVIDER_SECRET_BODY"}}
+  with patch.object(self.main.httpx,'get',return_value=Resp()):
+   with self.assertRaises(RuntimeError) as gmail_check:self.main.gmail_exact_sent('tok','person@example.com','Subject','2026-07-27')
+   with self.assertRaises(HTTPException) as groups:self.main.get_contact_group_id('tok','Group')
+   with self.assertRaises(HTTPException) as members:self.main.get_contacts_in_group('tok','contactGroups/x')
+  with patch.object(self.main.httpx,'post',return_value=Resp()):
+   with self.assertRaises(Exception) as gmail_send:self.main.send_gmail('tok','person@example.com','Subject','Body','iris@example.com','Iris')
+  combined=' '.join([str(gmail_check.exception),str(groups.exception.detail),str(members.exception.detail),str(gmail_send.exception)])
+  self.assertNotIn('PROVIDER_SECRET_BODY',combined);self.assertNotIn('person@example.com',str(gmail_send.exception));self.assertIn('HTTP 403',combined)
+
  def test_google_invalid_grant_is_sanitized_and_actionable(self):
   class Resp:
    status_code=400

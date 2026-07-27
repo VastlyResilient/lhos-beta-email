@@ -178,7 +178,7 @@ def gmail_exact_sent(access_token: str, to_email: str, subject: str, date_key: s
     q = f'in:sent to:{to_email} subject:"{subject}" after:{day:%Y/%m/%d} before:{nxt:%Y/%m/%d}'
     resp = httpx.get("https://gmail.googleapis.com/gmail/v1/users/me/messages", headers={"Authorization": f"Bearer {access_token}"}, params={"q": q, "maxResults": 20}, timeout=30)
     if resp.status_code != 200:
-        raise RuntimeError(f"Gmail Sent precheck failed: {resp.status_code} {resp.text}")
+        raise RuntimeError(f"Gmail Sent precheck failed (HTTP {resp.status_code}).")
     for item in resp.json().get("messages", []):
         meta = httpx.get(f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{item['id']}", headers={"Authorization": f"Bearer {access_token}"}, params={"format":"metadata","metadataHeaders":["To","Subject"]}, timeout=30)
         if meta.status_code != 200: raise RuntimeError(f"Gmail metadata check failed: {meta.status_code}")
@@ -195,7 +195,7 @@ def get_contact_group_id(access_token: str, group_name: str) -> Optional[str]:
         timeout=30,
     )
     if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Failed to list contact groups: {resp.text}")
+        raise HTTPException(status_code=503,detail={"category":"contacts_list_failed","message":f"Google Contacts group listing failed (HTTP {resp.status_code})."})
 
     groups = resp.json().get("contactGroups", [])
     for g in groups:
@@ -212,7 +212,7 @@ def get_contacts_in_group(access_token: str, group_resource_name: str) -> list:
         timeout=30,
     )
     if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Failed to get contact group: {resp.text}")
+        raise HTTPException(status_code=503,detail={"category":"contacts_members_failed","message":f"Google Contacts member listing failed (HTTP {resp.status_code})."})
 
     member_resource_names = resp.json().get("memberResourceNames", [])
 
@@ -254,7 +254,7 @@ def send_gmail(access_token: str, to: str, subject: str, html_body: str, sender_
     )
 
     if resp.status_code not in (200, 201):
-        raise Exception(f"Gmail send failed for {to}: {resp.status_code} {resp.text}")
+        raise RuntimeError(f"Gmail send failed (HTTP {resp.status_code}).")
 
     return resp.json()
 
@@ -682,11 +682,11 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
             # FAIL LOUD: draft exists but the re-review email did not go out.
             drafts = load_drafts()
             if new_draft_id in drafts:
-                drafts[new_draft_id]["review_delivery_error"] = str(e)
+                drafts[new_draft_id]["review_delivery_error"] = {"category":"review_delivery_failed","exception_type":type(e).__name__}
                 save_drafts(drafts)
             raise HTTPException(
                 status_code=502,
-                detail=f"Revised draft {new_draft_id} was created, but the re-review email FAILED to send to {approver_emails}: {e}",
+                detail={"category":"review_delivery_failed","message":"The revised draft was created, but the re-review email failed to send."},
             )
         # Record delivery evidence on the new draft.
         drafts = load_drafts()
@@ -702,7 +702,7 @@ async def edit_draft(draft_id: str, edit: DraftEdit, token: str = ""):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not build the re-review email: {e}")
+        raise HTTPException(status_code=500,detail={"category":"revision_build_failed","message":"Could not build the re-review email.","exception_type":type(e).__name__})
 
     return {"status": "revised", "old_draft_id": draft_id, "new_draft_id": new_draft_id, "approval_token": approval_token(new_draft_id), "review_to": approver_emails, "review_message_id": (sent or {}).get("id")}
 
@@ -757,7 +757,7 @@ def send_draft_safely(draft_id: str, approver: str):
         contacts = get_contacts_in_group(access_token, group_id)
         if not contacts: raise HTTPException(status_code=500, detail="No contacts found in beta group")
         try: suppressed = get_suppression_list()
-        except Exception as exc: raise HTTPException(status_code=503, detail=str(exc))
+        except Exception as exc: raise HTTPException(status_code=503,detail={"category":"suppression_service_failed","message":"The suppression-list safety check failed closed.","exception_type":type(exc).__name__})
     try: date_key = datetime.strptime(draft_date, "%B %d, %Y").strftime("%Y-%m-%d")
     except Exception: raise HTTPException(status_code=400, detail="Draft date is invalid")
     draft.update({"status":"sending","approved_by":approver,"approved_at":draft.get("approved_at") or datetime.now(timezone.utc).isoformat()}); save_drafts(drafts)

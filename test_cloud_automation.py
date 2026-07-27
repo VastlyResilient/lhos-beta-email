@@ -71,6 +71,21 @@ class CloudTests(unittest.TestCase):
   self.assertEqual(r.status_code,200);hb=ca.load(ca.HEARTBEAT_FILE,{});self.assertEqual(hb['watchdog_core'],at.isoformat());self.assertNotIn('watchdog_cloud',hb)
 
 
+
+
+ def test_corrupt_state_fails_closed_without_overwrite_or_notification(self):
+  at=ca.now_et().replace(hour=15,minute=2,second=0,microsecond=0);ca.STATE_FILE.write_text('{corrupt');sent=[]
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_subject_sent_any',return_value=False):r=self.app(send_email=lambda *a:sent.append(a)).post('/api/lhos/automation/reconcile',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.status_code,503);self.assertEqual(ca.STATE_FILE.read_text(),'{corrupt');self.assertEqual(sent,[]);self.assertEqual(r.json()['detail']['category'],'state_corrupt')
+
+ def test_gate_heartbeat_distinguishes_started_from_completed(self):
+  before=ca.now_et().replace(hour=14,minute=59,second=0,microsecond=0)
+  with patch.object(ca,'now_et',return_value=before):r=self.app().post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
+  hb=ca.load(ca.HEARTBEAT_FILE,{});self.assertEqual(r.json()['action'],'too_early');self.assertIn('auto_send_started',hb);self.assertNotIn('auto_send',hb)
+  at=before.replace(hour=15,minute=0)
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_subject_sent_any',return_value=True):r=self.app().post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
+  hb=ca.load(ca.HEARTBEAT_FILE,{});self.assertEqual(r.json()['action'],'not_sent');self.assertEqual(hb['auto_send'],at.isoformat())
+
  def test_auto_send_never_overwrites_partial_delivery(self):
   at=ca.now_et().replace(hour=15,minute=0,second=0,microsecond=0);date=at.strftime('%Y-%m-%d');state={"stage":"partial","content_valid":True,"draft_id":"id"};ca.atomic_json_write(ca.STATE_FILE,{date:state})
   with patch.object(ca,'now_et',return_value=at):r=self.app(initial_drafts={"id":{"status":"partial","approved_by":"Kristina"}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
