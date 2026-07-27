@@ -12,7 +12,7 @@ Bounded by design:
 """
 import json,os,sys,time,urllib.request,urllib.error
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from watchdog_status import google_workspace_outage,instatus_outage,github_statuspage_outage
+from watchdog_status import google_workspace_outage,instatus_outage,github_statuspage_outage,partition_watchdog_alerts
 
 N8N=os.environ["N8N_BASE_URL"].rstrip("/")
 N8N_KEY=os.environ["N8N_API_KEY"]
@@ -307,22 +307,24 @@ def ping(url,label):
         time.sleep(2*(attempt+1))
     log(f"{label} ping FAILED after retries (last={st})");return False
 
-if escalate:
-    # Suppress the page when the symptom is a CONFIRMED provider outage:
+predictive_alerts,operational_alerts=partition_watchdog_alerts(escalate)
+if operational_alerts:
+    # Suppress the page when the operational symptom is a CONFIRMED provider outage:
     # nothing to fix, retry+resume is automatic, paging Bobby is pure noise.
     outage=None
-    predictive=any(any(k in e.lower() for k in ("billing","cost","usage","minutes","projected")) for e in escalate)
-    if not predictive:
-        for e in escalate:
-            sym="google" if "oauth" in e.lower() or "gmail" in e.lower() else ("n8n" if ("n8n" in e.lower() or "workflow" in e.lower()) else "backend")
-            outage=provider_outage(sym)
-            if outage:break
+    for e in operational_alerts:
+        sym="google" if "oauth" in e.lower() or "gmail" in e.lower() else ("n8n" if ("n8n" in e.lower() or "workflow" in e.lower()) else "backend")
+        outage=provider_outage(sym)
+        if outage:break
     if outage:
         log(f"OUTAGE SUPPRESSION: {outage}. Not paging; level-triggered loop will auto-resume when provider recovers.")
-    else:
-        if HEARTBEAT_FAIL_URL:ping(HEARTBEAT_FAIL_URL,"heartbeat /fail")
-else:
+    elif HEARTBEAT_FAIL_URL:
+        ping(HEARTBEAT_FAIL_URL,"heartbeat /fail")
+elif predictive_alerts:
+    log("PREDICTIVE WARNING: recorded without paging; no operational recovery ladder failed.")
     if HEARTBEAT_URL:ping(HEARTBEAT_URL,"coarse liveness")
+elif HEARTBEAT_URL:
+    ping(HEARTBEAT_URL,"coarse liveness")
 
 # Business-outcome heartbeat: only ping when the DAY actually reached a verified
 # terminal state. A green liveness ping must never imply the edition shipped.

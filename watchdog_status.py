@@ -31,3 +31,10 @@ def github_statuspage_outage(payload):
     indicator=str(payload["status"].get("indicator") or "none").lower()
     if indicator in ("major","critical"):return f"GitHub outage (statuspage: {indicator})"
     return None
+
+PREDICTIVE_ALERT_TERMS=("billing","cost","usage","minutes","projected")
+def partition_watchdog_alerts(alerts):
+    predictive=[];operational=[]
+    for alert in alerts:
+        (predictive if any(term in alert.lower() for term in PREDICTIVE_ALERT_TERMS) else operational).append(alert)
+    return predictive,operational
