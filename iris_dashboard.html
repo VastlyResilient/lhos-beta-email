@@ -212,7 +212,7 @@ h1 em{font-style:italic;font-weight:400}
 }
 @media(max-width:760px){
  .rail{display:none}
- .topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:10px;margin:0;padding:12px 4px;background:rgba(3,9,19,.72);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-bottom:1px solid rgba(194,229,255,.14)}
+ .topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:10px;margin:0;padding:12px max(4px,env(safe-area-inset-right)) 12px max(4px,env(safe-area-inset-left));background:rgba(3,9,19,.72);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-bottom:1px solid rgba(194,229,255,.14)}
  .topbar .mark{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle at 34% 30%,rgba(115,191,255,.32),rgba(13,25,43,.5) 70%);border:1px solid rgba(199,231,255,.28);color:#eaf6ff;flex:none}
  .topbar .mark svg{width:20px;height:20px}
  .topbar nav{display:flex;gap:4px;flex:1;overflow-x:auto;scrollbar-width:none}
@@ -220,23 +220,50 @@ h1 em{font-style:italic;font-weight:400}
  .topbar .rail-item{flex-direction:row;gap:6px;padding:9px 6px;font-size:11.5px;border-radius:999px;white-space:nowrap}
  .topbar .rail-item svg{width:16px;height:16px}
  .topbar .rail-live{padding:7px 11px;font-size:10px}
- .shell{margin:0;padding:14px 16px 96px;max-width:none}
+ .shell{margin:0;padding:14px max(16px,env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));max-width:none}
+ section.page{gap:20px;padding-top:64px;padding-bottom:48px}
  .page-head{flex-direction:column;align-items:flex-start;gap:16px}
  h1{font-size:36px}
  .card-value{font-size:32px}
- .ov-health{flex-direction:column;align-items:flex-start}
- .bento,.strip,.ah-defs{grid-template-columns:1fr}
+ .liquid-glass{background:linear-gradient(160deg,rgba(6,13,28,.18),rgba(6,13,28,.12));-webkit-backdrop-filter:blur(10px) saturate(112%);backdrop-filter:blur(10px) saturate(112%)}
+ .liquid-glass--primary{background:linear-gradient(160deg,rgba(6,13,28,.24),rgba(6,13,28,.18))}
+ .bento{gap:16px}
+ .bento,.strip,.ah-defs{grid-template-columns:minmax(0,1fr)}
+ .ov-grid{grid-template-columns:minmax(0,1fr)}
+ .ov-grid>*,.ov-health,.ov-api{grid-column:1!important;grid-row:auto!important;min-width:0}
+ .ov-health{display:block;text-align:left}
+ .ov-health .health-core{display:grid;grid-template-columns:110px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:4px 18px;width:100%;margin:0;text-align:left}
+ .ov-health .ring-wrap{grid-column:1;grid-row:1/3;width:110px;height:110px;margin:0}
+ .ov-health .card-value{grid-column:2;grid-row:1;align-self:end;font-size:34px}
+ .ov-health .card-sub{grid-column:2;grid-row:2;align-self:start}
+ .ov-grid>.card:not(.ov-health):not(.ov-api){display:grid;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto auto;align-items:start;gap:4px 16px}
+ .ov-grid>.card:not(.ov-health):not(.ov-api) .card-head{display:contents}
+ .ov-grid>.card:not(.ov-health):not(.ov-api) .card-head .icon-tile{grid-column:1;grid-row:1/3}
+ .ov-grid>.card:not(.ov-health):not(.ov-api) .card-head h2{grid-column:2;grid-row:1;font-size:17px}
+ .ov-grid>.card:not(.ov-health):not(.ov-api) .card-value{grid-column:2;grid-row:2;font-size:clamp(24px,7.4vw,30px)}
+ .ov-grid>.card:not(.ov-health):not(.ov-api) .card-sub{grid-column:2;grid-row:3;margin-top:2px}
+ .ov-api{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px 16px}
+ .ov-api .card-head{grid-column:1;margin:0}
+ .ov-api .api-state{grid-column:2;margin:0;text-align:right}
+ .ov-api>.card-sub{grid-column:1/-1;grid-row:2}
  .ov-api,.sys-watch{flex-direction:column;align-items:flex-start}
- .ov-api .api-state{margin-left:0;text-align:left}
+ .ov-api .api-state{margin-left:0;text-align:right}
  .strip{gap:14px}
  .sys-grid{grid-template-columns:1fr}
  .sys-google,.sys-api,.sys-sched,.sys-watch{grid-column:auto;grid-row:auto}
  .ah-defs .def-col{border-left:0;padding-left:0}
  .ed-grid{grid-template-columns:1fr}
- .card{padding:22px 20px}
+ .card{min-width:0;padding:20px}
+ .card-head{min-width:0}
+ .card-head h2,.card-sub,.card-value{overflow-wrap:anywhere}
  .tl-step{grid-template-columns:46px 1fr}
  .tl-num{width:46px;height:46px;font-size:16px}
  .tl-step:not(:last-child)::before{left:22px}
+}
+@media(max-width:360px){
+ .ov-health .health-core{grid-template-columns:94px minmax(0,1fr);gap:4px 14px}
+ .ov-health .ring-wrap{width:94px;height:94px}
+ .ov-health .card-value{font-size:30px}
 }
 @media(max-width:390px){
  .topbar nav{gap:3px}
@@ -251,7 +278,7 @@ h1 em{font-style:italic;font-weight:400}
 <body>
 
 <div class="scroll-video" aria-hidden="true">
- <video id="fallbackVideo" muted playsinline preload="auto" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4"></video>
+ <video id="fallbackVideo" muted playsinline preload="auto"></video>
  <canvas id="videoCanvas"></canvas>
 </div>
 <div class="wallpaper" aria-hidden="true">
@@ -604,6 +631,8 @@ async function load(){
  const VIDEO_URL='https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260611_104107_121bfb5a-b1df-4e0d-8240-25b81f7cc85d.mp4';
  const canvas=$('videoCanvas'),fallback=$('fallbackVideo');if(!canvas||!fallback)return;
  const mobile=matchMedia('(max-width: 760px)').matches;
+ const MOBILE_FRAME_RATE=24;
+ fallback.src=mobile?'/assets/iris-scroll-mobile-1080p.mp4?v=mobile-scrub-1':VIDEO_URL;fallback.load();
  const ctx=canvas.getContext('2d',{alpha:false});
  let frames=[],objectUrl=null,frameVideo=null,cancelled=false,lastIndex=-1,smoothed=0,fallbackDuration=0,fallbackSeeking=false,fallbackTarget=0,fallbackUnlocked=false;
  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
@@ -620,20 +649,21 @@ async function load(){
    const blob=await r.blob();if(cancelled)return;
    objectUrl=URL.createObjectURL(blob);frameVideo=document.createElement('video');frameVideo.muted=true;frameVideo.playsInline=true;frameVideo.preload='auto';frameVideo.src=objectUrl;frameVideo.load();
    if(frameVideo.readyState<1)await once(frameVideo,'loadedmetadata');if(frameVideo.readyState<2)await once(frameVideo,'loadeddata');
-   const dur=frameVideo.duration,count=mobile?Math.min(48,Math.max(32,Math.round(dur*6))):Math.min(120,Math.max(30,Math.round(dur*24))),maxWidth=mobile?640:1280,scale=Math.min(1,maxWidth/frameVideo.videoWidth),wid=Math.max(1,Math.round(frameVideo.videoWidth*scale)),hei=Math.max(1,Math.round(frameVideo.videoHeight*scale)),end=Math.max(0,dur-.05);
+   const dur=frameVideo.duration,count=Math.min(120,Math.max(30,Math.round(dur*24))),scale=Math.min(1,1280/frameVideo.videoWidth),wid=Math.max(1,Math.round(frameVideo.videoWidth*scale)),hei=Math.max(1,Math.round(frameVideo.videoHeight*scale)),end=Math.max(0,dur-.05);
    for(let i=0;i<count&&!cancelled;i++){await seek(frameVideo,(i/(count-1))*end);if(cancelled)break;extracted.push(await createImageBitmap(frameVideo,{resizeWidth:wid,resizeHeight:hei,resizeQuality:'high'}))}
    if(cancelled){extracted.forEach(f=>f.close());return}
-   frames=extracted;releaseExtractor();resize();draw(frames[0]);canvas.classList.add('is-ready');fallback.classList.add('frames-ready');setMode(mobile?'frames-mobile':'frames-desktop');
+   frames=extracted;releaseExtractor();resize();draw(frames[0]);canvas.classList.add('is-ready');fallback.classList.add('frames-ready');setMode('frames-desktop');
   }catch(e){
    extracted.forEach(f=>f.close());frames=[];releaseExtractor();canvas.classList.remove('is-ready');fallback.classList.remove('frames-ready');setMode('video-fallback');
   }
  }
  function syncFallbackDuration(){fallbackDuration=Number.isFinite(fallback.duration)?fallback.duration:0}
  function updateFallback(t){
-  fallbackTarget=t;if(!fallbackDuration||fallbackSeeking||fallback.readyState<2)return;
-  if(Math.abs(fallback.currentTime-t)<=.001)return;
+  const target=mobile?Math.round(t*MOBILE_FRAME_RATE)/MOBILE_FRAME_RATE:t;
+  fallbackTarget=target;if(!fallbackDuration||fallbackSeeking||fallback.readyState<2)return;
+  if(Math.abs(fallback.currentTime-target)<=.001)return;
   fallbackSeeking=true;
-  try{fallback.currentTime=t}catch(e){fallbackSeeking=false}
+  try{fallback.currentTime=target}catch(e){fallbackSeeking=false}
  }
  function releaseFallbackSeek(){fallbackSeeking=false;if(Math.abs(fallback.currentTime-fallbackTarget)>.035)updateFallback(fallbackTarget)}
  function unlockFallback(){
@@ -641,10 +671,10 @@ async function load(){
   const playback=fallback.play();
   if(playback&&typeof playback.then==='function')playback.then(()=>{fallback.pause();updateFallback(fallbackTarget)}).catch(()=>{fallbackUnlocked=false});
  }
- setMode('loading');fallback.setAttribute('webkit-playsinline','');fallback.addEventListener('loadedmetadata',syncFallbackDuration);fallback.addEventListener('seeked',releaseFallbackSeek);syncFallbackDuration();
+ setMode(mobile?'video-mobile':'loading');fallback.setAttribute('webkit-playsinline','');fallback.addEventListener('loadedmetadata',syncFallbackDuration);fallback.addEventListener('seeked',releaseFallbackSeek);syncFallbackDuration();
  addEventListener('touchstart',unlockFallback,{once:true,passive:true});addEventListener('pointerdown',unlockFallback,{once:true,passive:true});
  addEventListener('resize',resize,{passive:true});
- resize();extract();
+ resize();if(!mobile)extract();
  function tick(){const max=Math.max(1,document.documentElement.scrollHeight-innerHeight),target=clamp(scrollY/max,0,1);smoothed+=(target-smoothed)*.1;
   if(frames.length){const i=Math.min(frames.length-1,Math.round(smoothed*(frames.length-1)));if(i!==lastIndex){resize();draw(frames[i]);lastIndex=i}}
   else updateFallback(smoothed*Math.max(0,fallbackDuration-.05));

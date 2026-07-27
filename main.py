@@ -851,7 +851,7 @@ def _private_headers(response):
     response.headers["Referrer-Policy"]="no-referrer"
     response.headers["X-Frame-Options"]="DENY"
     response.headers["X-Content-Type-Options"]="nosniff"
-    response.headers["Content-Security-Policy"]="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self' https://d8j0ntlcm91z4.cloudfront.net; img-src 'self' data: blob:; font-src 'self'; media-src https://d8j0ntlcm91z4.cloudfront.net blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    response.headers["Content-Security-Policy"]="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self' https://d8j0ntlcm91z4.cloudfront.net; img-src 'self' data: blob:; font-src 'self'; media-src 'self' https://d8j0ntlcm91z4.cloudfront.net blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     return response
 
 def _google_dashboard_check():
@@ -895,7 +895,7 @@ def iris_assets(file_path:str):
     target=(ASSETS_DIR/file_path).resolve()
     if not str(target).startswith(str(ASSETS_DIR)+"/") or not target.is_file():
         return JSONResponse({"error":"not found"},status_code=404)
-    if target.suffix.lower() not in {".webp",".png",".svg",".jpg",".jpeg",".avif",".woff2"}:
+    if target.suffix.lower() not in {".webp",".png",".svg",".jpg",".jpeg",".avif",".woff2",".mp4"}:
         return JSONResponse({"error":"not found"},status_code=404)
     response=FileResponse(target)
     response.headers["Cache-Control"]="public, max-age=86400, immutable"

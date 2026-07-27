@@ -87,18 +87,30 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertIn('IntersectionObserver',DASHBOARD_HTML)
   self.assertIn('prefers-reduced-motion',DASHBOARD_HTML)
  def test_background_scroll_scrub_survives_reduced_motion(self):
-  self.assertIn('resize();extract();',DASHBOARD_HTML)
+  self.assertIn('resize();if(!mobile)extract();',DASHBOARD_HTML)
   self.assertIn('target=clamp(scrollY/max,0,1);',DASHBOARD_HTML)
   self.assertNotIn('target=reduced?0:',DASHBOARD_HTML)
   self.assertIn('@media(prefers-reduced-motion:reduce)',DASHBOARD_HTML)
- def test_mobile_scroll_video_uses_memory_safe_transactional_frames(self):
-  self.assertIn("mobile?Math.min(48",DASHBOARD_HTML)
-  self.assertIn("maxWidth=mobile?640:1280",DASHBOARD_HTML)
+ def test_mobile_scroll_video_uses_seek_optimized_asset(self):
+  from pathlib import Path as _P
+  asset=_P('/Users/bobby/lhos-beta-email/assets/iris-scroll-mobile-1080p.mp4')
+  self.assertTrue(asset.exists() and asset.stat().st_size>9000000,str(asset))
+  self.assertIn("/assets/iris-scroll-mobile-1080p.mp4",DASHBOARD_HTML)
+  self.assertIn("const MOBILE_FRAME_RATE=24",DASHBOARD_HTML)
+  self.assertIn("setMode(mobile?'video-mobile':'loading')",DASHBOARD_HTML)
+  self.assertIn("resize();if(!mobile)extract();",DASHBOARD_HTML)
+  self.assertIn("Math.round(t*MOBILE_FRAME_RATE)/MOBILE_FRAME_RATE",DASHBOARD_HTML)
+  self.assertNotIn("mobile?Math.min(48",DASHBOARD_HTML)
+ def test_desktop_scroll_video_keeps_transactional_frames(self):
   self.assertIn("const extracted=[]",DASHBOARD_HTML)
   self.assertIn("extracted.forEach(f=>f.close());frames=[]",DASHBOARD_HTML)
   self.assertIn("setMode('video-fallback')",DASHBOARD_HTML)
   self.assertIn("addEventListener('touchstart',unlockFallback",DASHBOARD_HTML)
   self.assertIn("frames=extracted;releaseExtractor();",DASHBOARD_HTML)
+ def test_mobile_overview_cards_reset_desktop_grid_spans(self):
+  self.assertIn(".ov-grid>*,.ov-health,.ov-api{grid-column:1!important;grid-row:auto!important",DASHBOARD_HTML)
+  self.assertIn(".ov-health .health-core{display:grid;grid-template-columns:110px minmax(0,1fr)",DASHBOARD_HTML)
+  self.assertIn(".ov-grid>.card:not(.ov-health):not(.ov-api){display:grid",DASHBOARD_HTML)
 
  def test_mobile_topbar_fits_four_links(self):
   self.assertIn('.topbar .rail-item{flex-direction:row;gap:6px;padding:9px 6px;font-size:11.5px',DASHBOARD_HTML)
