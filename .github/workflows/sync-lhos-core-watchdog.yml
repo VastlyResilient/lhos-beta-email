@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
+      N8N_BASE_URL: https://n8n-production-42eb.up.railway.app
       N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-      LHOS_WORKFLOW_ID: ${{ secrets.LHOS_WORKFLOW_ID }}
+      LHOS_WORKFLOW_ID: VUadvfAMj6cGA7dx
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
