@@ -85,6 +85,18 @@ class SecurityTests(unittest.TestCase):
   combined=' '.join([str(gmail_check.exception),str(groups.exception.detail),str(members.exception.detail),str(gmail_send.exception)])
   self.assertNotIn('PROVIDER_SECRET_BODY',combined);self.assertNotIn('person@example.com',str(gmail_send.exception));self.assertIn('HTTP 403',combined)
 
+ def test_google_temporary_oauth_errors_are_retryable(self):
+  class Resp:
+   status_code=400
+   def json(self):return {"error":"temporarily_unavailable","error_description":"provider detail"}
+  with patch.object(self.main,'GOOGLE_CLIENT_ID','cid'),patch.object(self.main,'GOOGLE_CLIENT_SECRET','secret'),patch.object(self.main,'GOOGLE_REFRESH_TOKEN','refresh'),patch.object(self.main.httpx,'post',return_value=Resp()):
+   with self.assertRaises(HTTPException) as cm:self.main.get_google_access_token()
+  self.assertEqual(cm.exception.detail['category'],'provider_temporary');self.assertTrue(cm.exception.detail['retryable']);self.assertNotIn('provider detail',str(cm.exception.detail))
+  Resp.status_code=408;Resp.json=lambda self:{}
+  with patch.object(self.main,'GOOGLE_CLIENT_ID','cid'),patch.object(self.main,'GOOGLE_CLIENT_SECRET','secret'),patch.object(self.main,'GOOGLE_REFRESH_TOKEN','refresh'),patch.object(self.main.httpx,'post',return_value=Resp()):
+   with self.assertRaises(HTTPException) as timeout:self.main.get_google_access_token()
+  self.assertTrue(timeout.exception.detail['retryable'])
+
  def test_google_invalid_grant_is_sanitized_and_actionable(self):
   class Resp:
    status_code=400

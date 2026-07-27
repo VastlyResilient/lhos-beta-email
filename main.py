@@ -160,7 +160,7 @@ def get_google_access_token() -> str:
         code=str(payload.get("error") or "").lower()
         if code=="invalid_grant":raise _google_auth_error("reconsent_required","Google authorization expired or was revoked; human re-consent is required.")
         if code in ("invalid_client","unauthorized_client"):raise _google_auth_error("configuration_error","Google rejected the OAuth client configuration; verify the production client credentials.")
-        if resp.status_code==429 or resp.status_code>=500:raise _google_auth_error("provider_temporary","Google's token service is temporarily unavailable; scheduled checks will retry.",retryable=True)
+        if code in ("temporarily_unavailable","server_error") or resp.status_code in (408,425,429) or resp.status_code>=500:raise _google_auth_error("provider_temporary","Google's token service is temporarily unavailable; scheduled checks will retry.",retryable=True)
         raise _google_auth_error("refresh_failed",f"Google rejected the token refresh (HTTP {resp.status_code}).")
     try:token=resp.json().get("access_token")
     except Exception:token=None
