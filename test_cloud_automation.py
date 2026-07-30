@@ -92,6 +92,10 @@ class CloudTests(unittest.TestCase):
   at=ca.now_et().replace(hour=15,minute=0,second=0,microsecond=0);date=at.strftime('%Y-%m-%d');state={"stage":"partial","content_valid":True,"draft_id":"id"};ca.atomic_json_write(ca.STATE_FILE,{date:state})
   with patch.object(ca,'now_et',return_value=at):r=self.app(initial_drafts={"id":{"status":"partial","approved_by":"Kristina"}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(r.json()['action'],'reconciliation_pending');self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['stage'],'partial')
+ def test_three_pm_success_preserves_delivery_boundary_timestamps(self):
+  at=ca.datetime(2030,1,2,15,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');state={'date':date,'date_display':'January 02, 2030','stage':'approved','content_valid':True,'draft_id':'id','subject':'Human','source':{'type':'drive'}};ca.atomic_json_write(ca.STATE_FILE,{date:state})
+  with patch.object(ca,'now_et',return_value=at):r=self.app(send_draft=lambda *a:{'status':'sent'},initial_drafts={'id':{'id':'id','status':'approved','approved_by':'Kristina'}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
+  persisted=ca.load(ca.STATE_FILE,{})[date];self.assertEqual(r.status_code,200);self.assertEqual(persisted['stage'],'sent');self.assertEqual(persisted['delivery_started_at'],at.isoformat());self.assertEqual(persisted['source_authority_locked_at'],at.isoformat())
  def test_recovered_not_sent_state_is_idempotent(self):
   at=ca.now_et().replace(hour=15,minute=2,second=0,microsecond=0);date=at.strftime('%Y-%m-%d');sent=[]
   with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_subject_sent_any',return_value=False):

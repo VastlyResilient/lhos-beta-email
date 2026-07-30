@@ -586,7 +586,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 try:supersession=generated_supersession(get_token(),date_key)
                 except Exception:return complete(notify_not_sent(date_key,date_display,state,"Iris fallback post-transition source binding could not be verified and failed closed.",False))
                 if supersession:return complete(notify_not_sent(date_key,date_display,state,"Human content arrived at delivery start and requires a new review.",False))
-            result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return complete(result)
+            result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');st=state_all();state=st.get(date_key,state);state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return complete(result)
     @router.post("/reconcile")
     async def reconcile(req:Request,dry_run:bool=False):
         auth(req)
