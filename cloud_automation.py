@@ -1,6 +1,6 @@
 """Cloud orchestration endpoints invoked by n8n. All actions are fail-closed and idempotent."""
 import base64, hashlib, html, hmac, json, os, re, tempfile, zipfile, fcntl
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta
 from email import message_from_bytes
 from email.header import decode_header, make_header
@@ -72,7 +72,7 @@ def google_headers(token):return {"Authorization":f"Bearer {token}"}
 
 def gmail_search(token,q,max_results=50):
     r=httpx.get("https://gmail.googleapis.com/gmail/v1/users/me/messages",headers=google_headers(token),params={"q":q,"maxResults":max_results},timeout=30)
-    if r.status_code!=200:raise RuntimeError(f"Gmail search failed: {r.status_code} {r.text}")
+    if r.status_code!=200:raise RuntimeError(f"Gmail search failed with HTTP {r.status_code}")
     return r.json().get("messages",[])
 
 def gmail_get(token,msg_id,fmt="full"):
@@ -125,7 +125,7 @@ def gmail_docx_attachments(token,msg_id,payload):
 def drive_source(token,date_key):
     dt=datetime.strptime(date_key,"%Y-%m-%d");name=dt.strftime("%y%m%d")+".docx";q=f"'{DRIVE_FOLDER_ID}' in parents and trashed=false and name='{name}'"
     r=httpx.get("https://www.googleapis.com/drive/v3/files",headers=google_headers(token),params={"q":q,"fields":"files(id,name,size,modifiedTime,lastModifyingUser(displayName,emailAddress))"},timeout=30)
-    if r.status_code!=200:raise RuntimeError(f"Drive lookup failed: {r.status_code} {r.text}")
+    if r.status_code!=200:raise RuntimeError(f"Drive lookup failed with HTTP {r.status_code}")
     files=r.json().get("files",[])
     if not files:return None,"",{"name":name,"missing":True}
     f=files[0];r=httpx.get(f"https://www.googleapis.com/drive/v3/files/{f['id']}",headers=google_headers(token),params={"alt":"media"},timeout=60)
@@ -183,7 +183,7 @@ def revise_with_glm(raw,feedback):
             text=r.json()['choices'][0]['message']['content'].strip();ok,reasons=validate_daily_content(text)
             if ok:return text
             last='; '.join(reasons)
-        else:last=f"{r.status_code} {r.text[:300]}"
+        else:last=f"provider HTTP {r.status_code}"
     raise RuntimeError("Revision failed: "+last)
 
 
@@ -290,6 +290,17 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         st=state_all();state=st.get(date_key,{})
         if state.get("draft_id")==draft_id:state.update({"stage":"review_sent","approved_by":None,"approved_at":None,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st)
 
+    def begin_delivery(date_key,draft_id,trigger):
+        """Durably define delivery start before a final conservative source recheck.
+
+        No recipient API is called until after that post-transition check passes.
+        """
+        st=state_all();state=st.get(date_key,{})
+        if state.get("draft_id")!=draft_id:raise RuntimeError("Authorized draft changed before delivery start")
+        if state.get("stage")=="sending" and state.get("delivery_started_at"):return state
+        if state.get("stage")!="approved":raise RuntimeError("Draft is not approved for delivery start")
+        stamp=now_et().isoformat();state.update({"stage":"sending","delivery_started_at":stamp,"source_authority_locked_at":stamp,"sent_trigger":trigger,"updated_at":stamp});st[date_key]=state;save_state(st);return state
+
     def finish_pending_review(date_key,state,token):
         drafts=load_drafts();draft=drafts.get(state.get("draft_id"))
         if not draft:raise RuntimeError("Pending review draft is missing")
@@ -327,8 +338,11 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         source_type=(existing.get("source") or {}).get("type")
         generated_pending=source_type=="iris_generated" and existing.get("stage")=="review_sent"
         if not force and existing.get("stage") in ("review_sent","approved","sending","partial","sent","sent_external") and not generated_pending:return {"action":"daily_complete" if existing.get("stage") in ("sent","sent_external") else "no_op","stage":existing.get("stage"),"draft_id":existing.get("draft_id")}
-        token=get_token();standard_subject=f"LifeHouse OS Beta Update - {date_display}"
-        if existing.get("stage")=="review_pending":return finish_pending_review(date_key,existing,token)
+        standard_subject=f"LifeHouse OS Beta Update - {date_display}"
+        if existing.get("stage")=="review_pending":
+            if dry_run:return {"action":"would_finish_pending_review","draft_id":existing.get("draft_id"),"review_subject":existing.get("review_subject")}
+            return finish_pending_review(date_key,existing,get_token())
+        token=get_token()
         sent_subjects={standard_subject}
         if existing.get("subject"):sent_subjects.add(existing["subject"])
         if any(gmail_subject_sent_any(token,s,date_key) for s in sent_subjects):
@@ -352,7 +366,10 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             st[date_key]=waiting;save_state(st)
             return {"action":"awaiting_iris_fallback","fallback_due_at":due.isoformat(),"reference_available":bool(reference)}
         pending=pending_editorial_message(token,date_key)
-        if pending:return {"action":"awaiting_authenticated_reference_processing","message_id":pending["message_id"],"from":pending["from"]}
+        if pending:
+            if not existing and not dry_run:
+                st=state_all();st[date_key]={"date":date_key,"date_display":date_display,"stage":"hold","content_valid":False,"source":meta,"pending_reference_message_id":pending["message_id"],"pending_reference_from":pending["from"],"updated_at":now.isoformat()};save_state(st)
+            return {"action":"awaiting_authenticated_reference_processing","message_id":pending["message_id"],"from":pending["from"]}
         if dry_run:return {"action":"would_generate_iris_fallback","valid":False,"reference_available":bool(reference),"source":meta}
         try:
             bundle=generate_fallback_bundle(date_key,reference)
@@ -386,11 +403,19 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             current_draft=load_drafts().get(approved_draft_id,{})
             if current_draft.get("status")!="approved":
                 return {"action":"approval_recorded_not_sent","send_policy":SEND_POLICY,"reason":f"draft status {current_draft.get('status')}","draft_id":approved_draft_id,"actor":actor}
-            if (fresh.get("source") or {}).get("type")=="iris_generated":
+            generated=(fresh.get("source") or {}).get("type")=="iris_generated"
+            if generated:
                 supersession=generated_supersession(token,date_key)
                 if supersession:
                     revoke_recorded_approval(date_key,approved_draft_id)
                     if supersession["type"]=="human_source":return prepare_from_raw(date_key,date_display,supersession["raw"],supersession["meta"],token,False,"Human source arrived during approval and replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=approved_draft_id)
+                    return {"action":"approval_revoked_pending_reference","message_id":supersession["pending"]["message_id"]}
+            begin_delivery(date_key,approved_draft_id,"on_approval")
+            if generated:
+                supersession=generated_supersession(token,date_key)
+                if supersession:
+                    revoke_recorded_approval(date_key,approved_draft_id)
+                    if supersession["type"]=="human_source":return prepare_from_raw(date_key,date_display,supersession["raw"],supersession["meta"],token,False,"Human source arrived at delivery start and replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=approved_draft_id)
                     return {"action":"approval_revoked_pending_reference","message_id":supersession["pending"]["message_id"]}
             send_result=send_draft(approved_draft_id,f"{actor} via {channel}")
             st=state_all();state=st.get(date_key,state);state.update({"stage":send_result.get("status","partial"),"sent_trigger":"on_approval","updated_at":now_et().isoformat()});st[date_key]=state;save_state(st)
@@ -408,7 +433,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             ("drive","https://www.googleapis.com/drive/v3/about",{"fields":"user(displayName)"}),
             ("contacts","https://people.googleapis.com/v1/contactGroups",{"pageSize":1,"groupFields":"name"})]:
             r=httpx.get(url,headers=google_headers(token),params=params,timeout=30);checks[name]=r.status_code
-            if r.status_code!=200:raise HTTPException(status_code=503,detail={"connector":name,"status":r.status_code,"body":r.text[:300]})
+            if r.status_code!=200:raise HTTPException(status_code=503,detail={"connector":name,"status":r.status_code})
         return {"status":"ok","checks":checks}
     @router.get("/status")
     async def status(req:Request):
@@ -417,17 +442,19 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def prepare(req:Request,dry_run:bool=False):
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
-        with automation_lock():
+        with (nullcontext() if dry_run else automation_lock()):
             if not dry_run:heartbeat("prepare")
             return prepare_impl(dry_run=dry_run)
     @router.post("/check-replies")
     async def check_replies(req:Request,dry_run:bool=False):
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
-        with automation_lock():
+        with (nullcontext() if dry_run else automation_lock()):
             if not dry_run:heartbeat("check_replies")
             date_key,date_display=current();st=state_all();state=st.get(date_key)
-            if not state:return {"action":"no_state"}
+            if not state:
+                if dry_run:return {"action":"no_state"}
+                expected=datetime.strptime(date_key,"%Y-%m-%d").strftime("%y%m%d")+".docx";state={"date":date_key,"date_display":date_display,"stage":"hold","content_valid":False,"source":{"name":expected,"missing":True},"updated_at":now_et().isoformat()};st[date_key]=state;save_state(st)
             if state.get("stage") in ("sent","sent_external"):return {"action":"daily_complete","stage":state.get("stage"),"draft_id":state.get("draft_id")}
             token=get_token();processed=set(load(PROCESSED_FILE,[]));allowed={a.strip().lower() for a in approval_senders}
             auth_query=' '.join('from:'+a for a in sorted(allowed));queries=[f'in:inbox after:{date_key.replace("-","/")} {{{auth_query}}}',f'in:inbox after:{date_key.replace("-","/")} {{subject:"LifeHouse OS" subject:"beta email" subject:LHOS}}']
@@ -508,7 +535,6 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     def notify_not_sent(date_key,date_display,state,reason,dry_run):
         subject=f"[NOT SENT] LifeHouse OS beta update - {date_display}"
         if dry_run:return {"action":"would_notify_not_sent","reason":reason,"stage":state.get("stage") if state else None}
-        if dry_run:return {"action":"would_notify_not_sent","reason":reason,"notification":"not_sent"}
         base=record_not_sent(date_key,date_display,state,reason);notification="already_sent"
         try:
             token=get_token()
@@ -521,7 +547,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     @router.post("/auto-send")
     async def auto_send(req:Request,dry_run:bool=False):
         auth(req)
-        with automation_lock():
+        with (nullcontext() if dry_run else automation_lock()):
             if not dry_run:heartbeat("auto_send_started")
             if now_et().hour < 15:return {"action":"too_early","scheduled_for":"15:00 America/New_York"}
             if dry_run:
@@ -550,15 +576,21 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 reason=("No authorized approver gave clear final approval." if state.get('content_valid') else "The dated source was missing or invalid.")+(f" Send policy in effect: {SEND_POLICY}." if SEND_POLICY=="ON_APPROVAL" else "")
                 return complete(notify_not_sent(date_key,date_display,state,reason,dry_run))
             if dry_run:return {"action":"would_send_approved","draft_id":state.get('draft_id'),"approved_by":draft.get('approved_by')}
-            if (state.get("source") or {}).get("type")=="iris_generated":
+            generated=(state.get("source") or {}).get("type")=="iris_generated"
+            if generated:
                 try:supersession=generated_supersession(get_token(),date_key)
                 except Exception:return complete(notify_not_sent(date_key,date_display,state,"Iris fallback final source binding could not be verified and failed closed.",False))
                 if supersession:return complete(notify_not_sent(date_key,date_display,state,"Human content changed during the final send transition and requires a new review.",False))
+            begin_delivery(date_key,state['draft_id'],"three_pm_gate")
+            if generated:
+                try:supersession=generated_supersession(get_token(),date_key)
+                except Exception:return complete(notify_not_sent(date_key,date_display,state,"Iris fallback post-transition source binding could not be verified and failed closed.",False))
+                if supersession:return complete(notify_not_sent(date_key,date_display,state,"Human content arrived at delivery start and requires a new review.",False))
             result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return complete(result)
     @router.post("/reconcile")
     async def reconcile(req:Request,dry_run:bool=False):
         auth(req)
-        with automation_lock():
+        with (nullcontext() if dry_run else automation_lock()):
             if not dry_run:heartbeat("reconcile")
             date_key,date_display=current();st=state_all();state=st.get(date_key)
             if dry_run:
@@ -578,11 +610,32 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             authorized=bool(draft.get("approved_by")) and draft.get("status") in ("sending","partial","approved")
             if not authorized:return {"action":"no_op","stage":state.get("stage"),"draft_status":draft.get("status")}
             if dry_run:return {"action":"would_reconcile","draft_id":state.get("draft_id"),"draft_status":draft.get("status")}
-            result=send_draft(state["draft_id"],draft.get("approved_by") or "reconcile@n8n");state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st[date_key]=state;save_state(st);return result
+            generated=(state.get("source") or {}).get("type")=="iris_generated"
+            if draft.get("status")=="approved":
+                def stop_for_supersession(supersession):
+                    revoke_recorded_approval(date_key,state["draft_id"]);fresh=state_all().get(date_key,state)
+                    if now_et().hour<15:
+                        if supersession["type"]=="human_source":return prepare_from_raw(date_key,date_display,supersession["raw"],supersession["meta"],get_token(),False,"Human source arrived during delivery recovery and replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=state["draft_id"])
+                        return {"action":"approval_revoked_pending_reference","message_id":supersession["pending"]["message_id"]}
+                    return notify_not_sent(date_key,date_display,fresh,"Human content arrived before recipient delivery; the generated edition was revoked after cutoff.",False)
+                if generated and state.get("stage")!="sending":
+                    try:supersession=generated_supersession(get_token(),date_key)
+                    except Exception:
+                        revoke_recorded_approval(date_key,state["draft_id"]);return notify_not_sent(date_key,date_display,state_all().get(date_key,state),"Generated delivery recovery could not verify source authority and failed closed.",False) if now_et().hour>=15 else {"action":"approval_revoked_source_check_failed"}
+                    if supersession:return stop_for_supersession(supersession)
+                if state.get("stage")!="sending":
+                    state["stage"]="approved";state["approved_by"]=draft.get("approved_by");state["approved_at"]=draft.get("approved_at");st[date_key]=state;save_state(st)
+                begin_delivery(date_key,state["draft_id"],"reconcile")
+                if generated:
+                    try:supersession=generated_supersession(get_token(),date_key)
+                    except Exception:
+                        revoke_recorded_approval(date_key,state["draft_id"]);return notify_not_sent(date_key,date_display,state_all().get(date_key,state),"Generated delivery recovery post-transition check failed closed.",False) if now_et().hour>=15 else {"action":"approval_revoked_source_check_failed"}
+                    if supersession:return stop_for_supersession(supersession)
+            result=send_draft(state["draft_id"],draft.get("approved_by") or "reconcile@n8n");state=state_all().get(date_key,state);state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st=state_all();st[date_key]=state;save_state(st);return result
     @router.post("/close-out")
     async def close_out(req:Request,dry_run:bool=False):
         auth(req)
-        with automation_lock():
+        with (nullcontext() if dry_run else automation_lock()):
             if not dry_run:heartbeat("close_out")
             date_key,date_display=current();state=state_all().get(date_key) or {};reports=load(REPORTS_FILE,{})
             if reports.get(date_key) and not dry_run:return {"action":"already_reported","date":date_key,"stage":reports[date_key].get("stage")}
@@ -619,7 +672,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     @router.post("/watchdog")
     async def watchdog(req:Request,dry_run:bool=False,source:str="cloud"):
         auth(req)
-        with automation_lock():
+        with (nullcontext() if dry_run else automation_lock()):
             source="core" if source.lower()=="core" else "cloud"
             if not dry_run:
                 heartbeat(f"watchdog_{source}")

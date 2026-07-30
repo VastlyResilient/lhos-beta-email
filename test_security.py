@@ -70,6 +70,11 @@ class SecurityTests(unittest.TestCase):
   page=self.c.get(f"/lhos/approve/{d['draft_id']}?token={tok}");self.assertEqual(page.status_code,200);self.assertIn('reply directly to the review email',page.text)
   approve=self.c.post(f"/api/lhos/approve/{d['draft_id']}?token={tok}",json={});self.assertEqual(approve.status_code,403)
   edit=self.c.post(f"/api/lhos/drafts/{d['draft_id']}/edit?token={tok}",json={'subject':'x','html_body':'y'});self.assertEqual(edit.status_code,403)
+ def test_draft_summary_exposes_test_mode_discriminator(self):
+  prod=self.main.create_draft_record('prod','h','t','July 23, 2026');test=self.main.create_draft_record('[TEST] t','h','t','July 23, 2026',True,'bobbyatf@gmail.com')
+  rows=self.c.get('/api/lhos/drafts',headers={'x-lhos-automation-token':'auto'}).json();by_id={x['id']:x for x in rows};self.assertFalse(by_id[prod['draft_id']]['test_mode']);self.assertTrue(by_id[test['draft_id']]['test_mode'])
+ def test_security_policy_is_read_only_and_fail_closed(self):
+  r=self.c.get('/api/lhos/security-policy',headers={'x-lhos-automation-token':'auto'});self.assertEqual(r.status_code,200);body=r.json();self.assertFalse(body['machine_token_decision']);self.assertFalse(body['machine_token_late_send']);self.assertFalse(body['machine_token_production_approval']);self.assertEqual(body['production_approval_evidence'],'authenticated_bound_review_email')
  def test_machine_token_cannot_approve_production_draft_over_http(self):
   d=self.main.create_draft_record('s','RECIPIENT_NAME_PLACEHOLDER UNSUB_URL_PLACEHOLDER','content','July 23, 2026')
   r=self.c.post(f"/api/lhos/approve/{d['draft_id']}",headers={'x-lhos-automation-token':'auto'},json={'approver':'Kristina'})

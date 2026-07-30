@@ -324,8 +324,22 @@ async def list_drafts(request: Request):
             "approved_by": d.get("approved_by"),
             "sent_at": d.get("sent_at"),
             "recipient_count": d.get("recipient_count", 0),
+            "test_mode": bool(d.get("test_mode")),
         })
     return summary
+
+@app.get("/api/lhos/security-policy")
+async def lhos_security_policy(request: Request):
+    """Read-only verification of production approval boundaries."""
+    require_automation(request)
+    return {
+        "machine_token_decision": False,
+        "machine_token_late_send": False,
+        "machine_token_production_approval": False,
+        "signed_link_production_approval": False,
+        "machine_token_test_approval": True,
+        "production_approval_evidence": "authenticated_bound_review_email",
+    }
 
 @app.get("/api/lhos/drafts/{draft_id}")
 async def get_draft(draft_id: str, request: Request):
