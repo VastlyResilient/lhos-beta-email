@@ -10,7 +10,8 @@ class CloudTests(unittest.TestCase):
  def tearDown(self):self.t.cleanup()
  def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None,get_token=lambda:'tok'):
   app=FastAPI(); drafts=dict(initial_drafts or {}); self._drafts=drafts
-  def create(s,h,t,d):drafts['id']={'id':'id','subject':s,'html_body':h,'text_body':t,'date':d,'status':'pending_approval'};return {'draft_id':'id'}
+  def create(s,h,t,d):
+   did='id' if 'id' not in drafts else f'id{len(drafts)+1}';drafts[did]={'id':did,'subject':s,'html_body':h,'text_body':t,'date':d,'status':'pending_approval'};return {'draft_id':did}
   app.include_router(ca.configure_router(get_token=get_token,send_email=send_email,create_draft=create,load_drafts=lambda:drafts,save_drafts=lambda d:None,send_draft=send_draft,approve_draft=approve_draft,approvers=['a@example.com'],approval_senders=['a@example.com'],public_url='https://x',sender_email='iris@example.com',sender_name='Iris'));return TestClient(app)
  def test_deterministic_preserves_named_sections(self):
   raw=('Good day Beta Team\nSprint 2 Continues\nWe fixed the dashboard issue and added a new feature for testing. '*4+'\nYour One-Time Survey Opens Today\nPlease complete the survey and send feedback.')
@@ -110,7 +111,7 @@ class CloudTests(unittest.TestCase):
   self.assertEqual(r.status_code,410);self.assertIn('disabled by policy',r.json()['detail'])
  def test_missing_content_alert_goes_only_to_bobby(self):
   at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);sent=[]
-  with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'drive_source',return_value=(None,'',{'name':None})),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+  with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'drive_source',return_value=(None,'',{'name':None})),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'generate_fallback_bundle',side_effect=RuntimeError('generation failed')):
    r=self.app(send_email=lambda *a:sent.append(a)).post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(r.json()['action'],'hold');self.assertEqual(len(sent),1);self.assertEqual(sent[0][1],'bobbyatf@gmail.com')
  def test_not_sent_alert_goes_only_to_bobby(self):
@@ -288,4 +289,52 @@ class CloudTests(unittest.TestCase):
   pay=self._pl(('ARC-Authentication-Results','mx.google.com; dkim=pass header.i=@example.com; dmarc=pass'))
   ok,v=ca.sender_authenticated('a@example.com',pay)
   self.assertTrue(ok);self.assertEqual(v['source'],'arc-authentication-results')
+ def _fallback_bundle(self):
+  raw=('Today’s Beta Notes\nUse one real household situation to test a clearer routine. '*5+'\nToday’s Beta Mission\nChoose one transition, try the steps, and share specific feedback. '*4+'\nThank You\nThank you for helping make household life more intentional.')
+  return {'subject':'LifeHouse OS Daily Briefing - January 02, 2030','intro':'Today combines a practical household system with a focused beta mission.','sections':[{'title':'Today’s Beta Notes','body':'Small tests can reveal useful improvements for everyday household life.'},{'title':'Today’s Beta Mission','body':'Choose one real household transition and note what feels clear, where you hesitate, and what would help.'},{'title':'A Household Win','body':'List what must happen today, what would be helpful, and what can safely wait.'},{'title':'A Question for Your House','body':'Which household transition creates the most friction right now?'},{'title':'Thank You','body':'Thank you for testing thoughtfully and sharing specific feedback.'}],'raw':raw,'topic_id':'work-home-handoff','generator':'test'}
+ def test_missing_source_waits_until_730_without_email(self):
+  at=ca.datetime(2030,1,2,7,29,tzinfo=ca.ET);sent=[]
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'drive_source',return_value=(None,'',{'name':'300102.docx','missing':True})),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'generate_fallback_bundle',side_effect=AssertionError('too early')):
+   r=self.app(send_email=lambda *a:sent.append(a)).post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'awaiting_iris_fallback');self.assertEqual(sent,[]);self.assertEqual(ca.load(ca.STATE_FILE,{})['2030-01-02']['stage'],'hold')
+ def test_missing_source_generates_one_review_at_730(self):
+  at=ca.datetime(2030,1,2,7,30,tzinfo=ca.ET);sent=[];bundle=self._fallback_bundle()
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'drive_source',return_value=(None,'',{'name':'300102.docx','missing':True})),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'generate_fallback_bundle',return_value=bundle):
+   app=self.app(send_email=lambda *a:sent.append(a));first=app.post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'});second=app.post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(first.json()['action'],'review_sent');self.assertEqual(second.json()['action'],'no_op');self.assertEqual(len(sent),1);state=ca.load(ca.STATE_FILE,{})['2030-01-02'];self.assertEqual(state['source']['type'],'iris_generated');self.assertEqual(state['stage'],'review_sent');self.assertTrue(state['content_valid'])
+ def test_valid_drive_content_always_beats_fallback(self):
+  at=ca.datetime(2030,1,2,7,45,tzinfo=ca.ET);raw=('Today we fixed the mobile dashboard issue and added a concrete feature for beta testing and feedback. '*5)
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'300102.docx'})),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'generate_fallback_bundle',side_effect=AssertionError('human source must win')):
+   r=self.app(send_email=lambda *a:None).post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'review_sent');self.assertNotEqual(ca.load(ca.STATE_FILE,{})['2030-01-02']['source'].get('type'),'iris_generated')
+ def test_late_drive_source_replaces_unapproved_fallback(self):
+  at=ca.datetime(2030,1,2,7,30,tzinfo=ca.ET);bundle=self._fallback_bundle();raw=('Today we fixed the mobile dashboard issue and added a concrete feature for beta testing and feedback. '*5);sources=[(None,'',{'name':'300102.docx','missing':True}),({'id':'f'},raw,{'name':'300102.docx'})];sent=[]
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'drive_source',side_effect=sources),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'generate_fallback_bundle',return_value=bundle):
+   app=self.app(send_email=lambda *a:sent.append(a));a=app.post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'});b=app.post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(a.json()['action'],'review_sent');self.assertEqual(b.json()['action'],'review_sent');state=ca.load(ca.STATE_FILE,{})['2030-01-02'];self.assertEqual(state['source']['name'],'300102.docx');self.assertEqual(len(sent),2);self.assertEqual(self._drafts['id']['status'],'revised')
+ def test_fallback_generation_failure_alerts_only_bobby(self):
+  at=ca.datetime(2030,1,2,7,30,tzinfo=ca.ET);sent=[]
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'drive_source',return_value=(None,'',{'name':'300102.docx','missing':True})),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'generate_fallback_bundle',side_effect=RuntimeError('provider unavailable')):
+   r=self.app(send_email=lambda *a:sent.append(a)).post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'hold');self.assertEqual(len(sent),1);self.assertEqual(sent[0][1],'bobbyatf@gmail.com');self.assertNotIn('provider unavailable',str(sent[0]))
+ def test_authenticated_short_reference_is_saved_for_730_generation(self):
+  at=ca.datetime(2030,1,2,7,20,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'January 02, 2030','stage':'hold','content_valid':False,'source':{'missing':True}}});msg=self._gmail_message('ref1','a@example.com','LifeHouse OS daily briefing reference','Please use travel preparation and a smoother return home as today’s reference.',1000);sent=[]
+  app=self.app(send_email=lambda *a:sent.append(a))
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_search',return_value=[{'id':'ref1'}]),patch.object(ca,'gmail_get',return_value=msg):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  at_next=at.replace(minute=21)
+  with patch.object(ca,'now_et',return_value=at_next),patch.object(ca,'drive_source',return_value=(None,'',{'name':'300102.docx','missing':True})),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+   polled=app.post('/api/lhos/automation/prepare',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['results'][0]['action'],'reference_recorded');self.assertEqual(polled.json()['action'],'awaiting_iris_fallback');state=ca.load(ca.STATE_FILE,{})[date];self.assertIn('travel preparation',state['reference_content']);self.assertEqual(sent,[])
+ def test_generated_approval_rechecks_drive_and_human_source_wins(self):
+  at=ca.datetime(2030,1,2,9,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');generated=self._fallback_bundle()['raw'];state={'date':date,'date_display':'January 02, 2030','stage':'review_sent','content_valid':True,'draft_id':'id','subject':'Generated','review_subject':'[REVIEW] Fallback','raw_content':generated,'source':{'type':'iris_generated'}};ca.atomic_json_write(ca.STATE_FILE,{date:state});raw=('Today we fixed the mobile dashboard issue and added a concrete feature for beta testing and feedback. '*5);msg=self._gmail_message('approve1','a@example.com','Re: [REVIEW] Fallback','Approved, send it.',1000);calls=[];sent=[]
+  app=self.app(send_email=lambda *a:sent.append(a),send_draft=lambda *a:calls.append(a),initial_drafts={'id':{'id':'id','status':'pending_approval','subject':'Generated','html_body':'x','text_body':generated,'date':'January 02, 2030'}})
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_search',return_value=[{'id':'approve1'}]),patch.object(ca,'gmail_get',return_value=msg),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'300102.docx'})),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(calls,[]);result=r.json()['results'][0];self.assertEqual(result['action'],'review_sent');self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['source']['name'],'300102.docx');self.assertEqual(self._drafts['id']['status'],'revised');self.assertEqual(len(sent),1)
+ def test_at_gate_generated_fallback_rechecks_human_source_before_send(self):
+  at=ca.datetime(2030,1,2,15,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');raw=('Today we fixed the mobile dashboard issue and added a concrete feature for beta testing and feedback. '*5);state={'date':date,'date_display':'January 02, 2030','stage':'approved','content_valid':True,'draft_id':'id','subject':'Generated','source':{'type':'iris_generated'}};ca.atomic_json_write(ca.STATE_FILE,{date:state});sent=[]
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'300102.docx'})),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+   r=self.app(send_email=lambda *a:sent.append(a),initial_drafts={'id':{'id':'id','status':'approved','approved_by':'Kristina'}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(r.json()['action'],'not_sent');self.assertIn('requires a new review',r.json()['reason']);self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['stage'],'not_sent');self.assertEqual(sent[0][1],'bobbyatf@gmail.com')
 if __name__=='__main__':unittest.main()
