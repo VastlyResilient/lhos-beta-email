@@ -147,6 +147,10 @@ class IrisDashboardHealthTests(unittest.TestCase):
   self.assertEqual(s["edition"]["light"],"orange")
   self.assertIn("Waiting for content",s["edition"]["label"])
   self.assertIn("No system repair",' '.join(x["detail"] for x in s["awareness"]))
+ def test_review_pending_is_truthful_non_alarmist_incomplete_review(self):
+  now=datetime(2026,7,25,8,0,tzinfo=ET);fresh=(now-timedelta(seconds=30)).isoformat()
+  s=self.snap(now=now,state={"stage":"review_pending","content_valid":True,"draft_id":"d"},heartbeat={"prepare":fresh,"check_replies":fresh,"watchdog":fresh})
+  self.assertEqual(s["edition"]["light"],"orange");self.assertIn("Finalizing review delivery",s["edition"]["label"]);self.assertEqual(s["edition"]["steps"][1]["state"],"current")
  def test_stale_scheduler_during_active_window_is_red(self):
   now=datetime(2026,7,25,11,0,tzinfo=ET);stale=(now-timedelta(minutes=12)).isoformat();watch=(now-timedelta(minutes=5)).isoformat()
   s=self.snap(now=now,state={"stage":"hold","content_valid":False},heartbeat={"prepare":stale,"check_replies":stale,"watchdog":watch})

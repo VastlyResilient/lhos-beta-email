@@ -70,6 +70,10 @@ class SecurityTests(unittest.TestCase):
   page=self.c.get(f"/lhos/approve/{d['draft_id']}?token={tok}");self.assertEqual(page.status_code,200);self.assertIn('reply directly to the review email',page.text)
   approve=self.c.post(f"/api/lhos/approve/{d['draft_id']}?token={tok}",json={});self.assertEqual(approve.status_code,403)
   edit=self.c.post(f"/api/lhos/drafts/{d['draft_id']}/edit?token={tok}",json={'subject':'x','html_body':'y'});self.assertEqual(edit.status_code,403)
+ def test_machine_token_cannot_approve_production_draft_over_http(self):
+  d=self.main.create_draft_record('s','RECIPIENT_NAME_PLACEHOLDER UNSUB_URL_PLACEHOLDER','content','July 23, 2026')
+  r=self.c.post(f"/api/lhos/approve/{d['draft_id']}",headers={'x-lhos-automation-token':'auto'},json={'approver':'Kristina'})
+  self.assertEqual(r.status_code,410);self.assertEqual(self.main.load_drafts()[d['draft_id']]['status'],'pending_approval')
 
 
  def test_google_api_failures_do_not_expose_provider_bodies(self):

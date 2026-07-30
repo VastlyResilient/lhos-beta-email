@@ -32,15 +32,22 @@ IMESSAGE_ENABLED=False  # Policy invariant: LHOS iMessage intake/outbound is dis
 def generate_fallback_bundle(date_key, reference=""):
     """Public seam for tests; provider failures fall back to curated copy when no reference exists."""
     return generate_for_date(date_key, reference, GLM_API_KEY, GLM_BASE_URL)
-APPROVAL_WORDS=("approved","approve","looks good","send it","send the email","good to send","go ahead","confirmed","confirm","lgtm","ship it","ship this","release it","ready to send")
+APPROVAL_PATTERNS=(
+    r"^(?:approved|approve|confirmed|lgtm)[.!]*$",
+    r"^(?:approved|looks good(?: to me)?|good)[,;: .—-]+(?:please )?(?:send it(?: to (?:the )?beta testers)?|send the email|good to send|go ahead|ship it|release it)[.!]*$",
+    r"^(?:please )?(?:send it(?: to (?:the )?beta testers)?|send the email|good to send|go ahead|ship it|release it|ready to send)[.!]*$",
+)
 REVISION_WORDS=("change","revise","revision","edit","replace","remove","add","fix","correct","update","rewrite","adjust")
 HOLD_PATTERNS=(r"\bdo not send\b",r"\bdon[’']?t send\b",r"\bnot approved\b",r"\bhold (?:off|this|the email)\b",r"\bwait\b",r"\bnot ready\b")
+UNCERTAIN_PATTERNS=(r"\bhaven[’']?t confirm",r"\bnot confirm",r"\bplease confirm\b",r"\bmaybe\b",r"\bif .*ready\b",r"\bwhen ready\b")
 
 def classify_instruction(text):
-    low=re.sub(r"\s+"," ",(text or "").lower()).strip()
+    raw=(text or "").strip();raw=re.split(r"\n(?:On .+ wrote:|From:)",raw,maxsplit=1,flags=re.I)[0]
+    low=re.sub(r"\s+"," ",raw.lower()).strip()
     if any(re.search(p,low) for p in HOLD_PATTERNS):return "hold"
+    if any(re.search(p,low) for p in UNCERTAIN_PATTERNS):return "ambiguous"
     if any(re.search(rf"\b{re.escape(w)}\b",low) for w in REVISION_WORDS):return "revise"
-    if any(w in low for w in APPROVAL_WORDS):return "approve"
+    if any(re.fullmatch(p,low) for p in APPROVAL_PATTERNS):return "approve"
     return "ambiguous"
 
 
@@ -202,8 +209,6 @@ def auth_verdicts(payload):
     vals=_header_list(payload,"authentication-results")
     source="authentication-results"
     if not vals:
-        vals=_header_list(payload,"arc-authentication-results");source="arc-authentication-results"
-    if not vals:
         return {"raw":"","dkim":None,"spf":None,"dmarc":None,"dkim_domain":None,"authserv":None,"source":None,"instances":0}
     flat=" ".join(vals[0].split())          # TOPMOST only
     authserv=flat.split(";",1)[0].strip().lower() if ";" in flat else flat.strip().lower()
@@ -231,7 +236,7 @@ def sender_authenticated(addr,payload):
     v=auth_verdicts(payload)
     if not AUTH_REQUIRED:return True,{**v,"enforced":False,"basis":"enforcement_disabled"}
     if not v.get("source"):return False,{**v,"basis":"no_auth_results"}
-    if TRUSTED_AUTHSERV and v.get("authserv") and TRUSTED_AUTHSERV not in v["authserv"]:
+    if TRUSTED_AUTHSERV and v.get("authserv")!=TRUSTED_AUTHSERV:
         return False,{**v,"basis":"untrusted_authserv"}
     from_domain=(addr.rsplit("@",1)[-1] or "").lower()
     aligned=bool(v["dkim_domain"] and from_domain and (v["dkim_domain"]==from_domain or from_domain.endswith("."+v["dkim_domain"])))
@@ -258,6 +263,48 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         url=approval_path if approval_path.startswith("http") else public_url + approval_path
         preview=email_html.replace("RECIPIENT_NAME_PLACEHOLDER","Hello Beta Tester!").replace("UNSUB_URL_PLACEHOLDER","#")
         return f'<html><body><div style="background:#0E1B33;color:white;padding:20px;text-align:center;font-family:Nunito,Arial,sans-serif"><h2>{html.escape(subtitle)}</h2><p>Review the validated email below. Approve, edit, or request changes.</p><a style="display:inline-block;background:#4BC0C4;color:white;padding:14px 30px;text-decoration:none;font-weight:700" href="{url}">Review, Edit, or Approve for 3 PM</a></div>{preview}</body></html>'
+    def pending_editorial_message(token,date_key):
+        allowed={a.strip().lower() for a in approval_senders};processed=set(load(PROCESSED_FILE,[]))
+        query=f'in:inbox after:{date_key.replace("-","/")} '+'{'+(' '.join('from:'+a for a in sorted(allowed)))+'}'
+        for item in gmail_search(token,query,100):
+            if item.get("id") in processed:continue
+            msg=gmail_get(token,item["id"]);payload=msg.get("payload",{});h=headers_map(payload);addr=parseaddr(h.get("from",''))[1].strip().lower()
+            authed,_=sender_authenticated(addr,payload)
+            if addr not in allowed or not authed or is_auto_submitted(payload):continue
+            subj=dec_header(h.get("subject",''));body=clean_reply(extract_gmail_body(payload)+'\n'+gmail_docx_attachments(token,item["id"],payload));combined=(subj+'\n'+body).lower()
+            if not re.search(r'\b(lifehouse|lhos|beta(?: email| update)?|daily briefing|content|reference)\b',combined,re.I):continue
+            ok,_=validate_daily_content(body);reference=usable_reference(body)
+            if classify_instruction(body) not in ("approve","hold") and (ok or reference):return {"message_id":item["id"],"from":addr,"body":body,"reference":reference,"complete":ok,"subject":subj}
+        return None
+
+    def generated_supersession(token,date_key):
+        pending=pending_editorial_message(token,date_key)
+        if pending:return {"type":"pending_reference","pending":pending}
+        file,raw,meta=drive_source(token,date_key);valid,_=validate_daily_content(raw)
+        if valid:return {"type":"human_source","file":file,"raw":raw,"meta":meta}
+        return None
+
+    def revoke_recorded_approval(date_key,draft_id):
+        drafts=load_drafts();draft=drafts.get(draft_id)
+        if draft and draft.get("status")!="sent":draft.update({"status":"pending_approval","approved_by":None,"approved_at":None});save_drafts(drafts)
+        st=state_all();state=st.get(date_key,{})
+        if state.get("draft_id")==draft_id:state.update({"stage":"review_sent","approved_by":None,"approved_at":None,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st)
+
+    def finish_pending_review(date_key,state,token):
+        drafts=load_drafts();draft=drafts.get(state.get("draft_id"))
+        if not draft:raise RuntimeError("Pending review draft is missing")
+        old_id=state.get("replaces_draft_id")
+        if old_id:
+            old=drafts.get(old_id)
+            if old and old.get("status")!="sent":old["status"]="revised";old["revised_at"]=now_et().isoformat();save_drafts(drafts)
+        review_subject=state["review_subject"]
+        if not gmail_subject_sent_any(token,review_subject,date_key):
+            send_email(token,','.join(approvers),review_subject,make_review(state["date_display"],state["approval_url"],draft["html_body"],state.get("review_subtitle","Daily content validated")),sender_email,sender_name)
+        st=state_all();current=st.get(date_key,state)
+        if current.get("draft_id")!=state.get("draft_id"):raise RuntimeError("Pending review transaction changed during delivery")
+        stamp=now_et().isoformat();current.update({"stage":"review_sent","review_sent_at":current.get("review_sent_at") or stamp,"updated_at":stamp});st[date_key]=current;save_state(st)
+        return {"action":"review_sent","draft_id":current["draft_id"],"subject":current["subject"]}
+
     def prepare_from_raw(date_key,date_display,raw,source,token,dry_run=False,subtitle="Daily content validated",*,composed_sections=None,intro="",subject=None,review_subject=None,replaces_draft_id=None):
         ok,reasons=validate_daily_content(raw)
         if not ok:return {"action":"hold","valid":False,"reasons":reasons,"source":source}
@@ -268,14 +315,11 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         subject=subject or f"LifeHouse OS Beta Update - {date_display}"
         review_subject=review_subject or f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display}"
         if dry_run:return {"action":"would_send_review","valid":True,"sections":section_names,"subject":subject,"source":source}
-        result=create_draft(subject,email_html,raw,date_display);did=result['draft_id']
-        if replaces_draft_id:
-            drafts=load_drafts();old=drafts.get(replaces_draft_id)
-            if old and old.get("status")!="sent":old["status"]="revised";old["revised_at"]=now_et().isoformat();save_drafts(drafts)
-        if not gmail_subject_sent_any(token,review_subject,date_key):send_email(token,','.join(approvers),review_subject,make_review(date_display,result.get("approval_url", f"/lhos/approve/{did}"),email_html,subtitle),sender_email,sender_name)
-        st=state_all();_created=now_et();st[date_key]={"date":date_key,"date_display":date_display,"stage":"review_sent","content_valid":True,"draft_id":did,"subject":subject,"review_subject":review_subject,"source":source,"raw_content":raw,"review_sent_at":_created.isoformat(),"deadline":"15:00 America/New_York","updated_at":_created.isoformat()}
-        if replaces_draft_id:st[date_key]["replaces_draft_id"]=replaces_draft_id
-        save_state(st);return {"action":"review_sent","draft_id":did,"subject":subject}
+        result=create_draft(subject,email_html,raw,date_display);did=result['draft_id'];review_subject=f"{review_subject} [draft:{did[:16]}]"
+        stamp=now_et().isoformat();pending={"date":date_key,"date_display":date_display,"stage":"review_pending","content_valid":True,"draft_id":did,"subject":subject,"review_subject":review_subject,"review_subtitle":subtitle,"approval_url":result.get("approval_url",f"/lhos/approve/{did}"),"source":source,"raw_content":raw,"deadline":"15:00 America/New_York","updated_at":stamp}
+        if replaces_draft_id:pending["replaces_draft_id"]=replaces_draft_id
+        st=state_all();st[date_key]=pending;save_state(st)
+        return finish_pending_review(date_key,pending,token)
     def prepare_impl(dry_run=False,force=False):
         date_key,date_display=current();now=now_et()
         if END_DATE and date_key>END_DATE:return {"action":"stopped","reason":"end_date","end_date":END_DATE}
@@ -284,6 +328,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
         generated_pending=source_type=="iris_generated" and existing.get("stage")=="review_sent"
         if not force and existing.get("stage") in ("review_sent","approved","sending","partial","sent","sent_external") and not generated_pending:return {"action":"daily_complete" if existing.get("stage") in ("sent","sent_external") else "no_op","stage":existing.get("stage"),"draft_id":existing.get("draft_id")}
         token=get_token();standard_subject=f"LifeHouse OS Beta Update - {date_display}"
+        if existing.get("stage")=="review_pending":return finish_pending_review(date_key,existing,token)
         sent_subjects={standard_subject}
         if existing.get("subject"):sent_subjects.add(existing["subject"])
         if any(gmail_subject_sent_any(token,s,date_key) for s in sent_subjects):
@@ -306,11 +351,11 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 if existing.get(key):waiting[key]=existing[key]
             st[date_key]=waiting;save_state(st)
             return {"action":"awaiting_iris_fallback","fallback_due_at":due.isoformat(),"reference_available":bool(reference)}
+        pending=pending_editorial_message(token,date_key)
+        if pending:return {"action":"awaiting_authenticated_reference_processing","message_id":pending["message_id"],"from":pending["from"]}
         if dry_run:return {"action":"would_generate_iris_fallback","valid":False,"reference_available":bool(reference),"source":meta}
         try:
             bundle=generate_fallback_bundle(date_key,reference)
-            generated_source={"type":"iris_generated","topic_id":bundle.get("topic_id"),"generator":bundle.get("generator"),"reference_used":bool(bundle.get("reference_used")),"dated_source":meta}
-            return prepare_from_raw(date_key,date_display,bundle["raw"],generated_source,token,False,"Iris-generated fallback — no complete dated content was available by 7:30 AM ET",composed_sections=bundle["sections"],intro=bundle["intro"],subject=bundle["subject"],review_subject=f"[REVIEW] LifeHouse OS Iris Fallback Draft - {date_display}")
         except Exception as exc:
             action_subject=f"[ACTION REQUIRED] Iris fallback generation failed - {date_display}"
             if not gmail_subject_sent_any(token,action_subject,date_key):
@@ -318,6 +363,8 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 send_email(token,ALERT_EMAIL,action_subject,body,sender_email,sender_name)
             st=state_all();st[date_key]={"date":date_key,"date_display":date_display,"stage":"hold","content_valid":False,"reasons":reasons,"source":meta,"reference_available":bool(reference),"fallback_failed_at":now.isoformat(),"fallback_error":type(exc).__name__,"action_subject":action_subject,"updated_at":now.isoformat()};save_state(st)
             return {"action":"hold","reason":"iris_fallback_generation_failed","reference_available":bool(reference)}
+        generated_source={"type":"iris_generated","topic_id":bundle.get("topic_id"),"generator":bundle.get("generator"),"reference_used":bool(bundle.get("reference_used")),"dated_source":meta}
+        return prepare_from_raw(date_key,date_display,bundle["raw"],generated_source,token,False,"Iris-generated fallback — no complete dated content was available by 7:30 AM ET",composed_sections=bundle["sections"],intro=bundle["intro"],subject=bundle["subject"],review_subject=f"[REVIEW] LifeHouse OS Iris Fallback Draft - {date_display}")
     def apply_instruction(date_key,date_display,state,actor,text,token,channel):
         kind=classify_instruction(text);st=state_all();drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
         if not draft:return {"action":"draft_missing","kind":kind}
@@ -325,9 +372,10 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             approved_draft_id=state["draft_id"]
             if (state.get("source") or {}).get("type")=="iris_generated":
                 # Human content remains authoritative until the instant of approval.
-                f,latest_raw,latest_meta=drive_source(token,date_key);latest_ok,_=validate_daily_content(latest_raw)
-                if latest_ok:
-                    return prepare_from_raw(date_key,date_display,latest_raw,latest_meta,token,False,"Human source arrived before approval and replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=approved_draft_id)
+                supersession=generated_supersession(token,date_key)
+                if supersession and supersession["type"]=="pending_reference":return {"action":"approval_deferred_pending_reference","message_id":supersession["pending"]["message_id"]}
+                if supersession and supersession["type"]=="human_source":
+                    return prepare_from_raw(date_key,date_display,supersession["raw"],supersession["meta"],token,False,"Human source arrived before approval and replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=approved_draft_id)
             result=approve_draft(approved_draft_id,f"{actor} via {channel}");state.update({"stage":"approved","approved_by":actor,"approval_channel":channel,"approval_text":text[:1000],"approved_at":now_et().isoformat(),"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st)
             if SEND_POLICY!="ON_APPROVAL":
                 return {"action":"approval_recorded","send_policy":SEND_POLICY,"scheduled_for":"15:00 America/New_York","draft_id":approved_draft_id,"actor":actor,**result}
@@ -338,18 +386,20 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             current_draft=load_drafts().get(approved_draft_id,{})
             if current_draft.get("status")!="approved":
                 return {"action":"approval_recorded_not_sent","send_policy":SEND_POLICY,"reason":f"draft status {current_draft.get('status')}","draft_id":approved_draft_id,"actor":actor}
+            if (fresh.get("source") or {}).get("type")=="iris_generated":
+                supersession=generated_supersession(token,date_key)
+                if supersession:
+                    revoke_recorded_approval(date_key,approved_draft_id)
+                    if supersession["type"]=="human_source":return prepare_from_raw(date_key,date_display,supersession["raw"],supersession["meta"],token,False,"Human source arrived during approval and replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=approved_draft_id)
+                    return {"action":"approval_revoked_pending_reference","message_id":supersession["pending"]["message_id"]}
             send_result=send_draft(approved_draft_id,f"{actor} via {channel}")
             st=state_all();state=st.get(date_key,state);state.update({"stage":send_result.get("status","partial"),"sent_trigger":"on_approval","updated_at":now_et().isoformat()});st[date_key]=state;save_state(st)
             return {"action":"approved_and_sent","send_policy":SEND_POLICY,"draft_id":approved_draft_id,"actor":actor,**send_result}
         if kind=="hold":
             draft.update({"status":"pending_approval","approved_by":None,"approved_at":None});save_drafts(drafts);state.update({"stage":"review_sent","approved_by":None,"approval_channel":None,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"send_held","draft_id":state["draft_id"],"actor":actor}
         if kind=="ambiguous":return {"action":"clarification_needed","draft_id":state["draft_id"],"actor":actor}
-        revised=revise_with_glm(state.get("raw_content",draft.get("text_body","")),text);sections=deterministic_sections(revised);email_html=build_beta_email(sections,date_display);subject=state["subject"];new=create_draft(subject,email_html,revised,date_display)
-        drafts=load_drafts();old_draft=drafts.get(state["draft_id"])
-        if not old_draft:raise RuntimeError("Original draft disappeared during revision")
-        old_draft["status"]="revised";old_draft["revised_at"]=now_et().isoformat();save_drafts(drafts)
-        did=new["draft_id"];count=int(state.get("revision_count",0))+1;review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Revision {count})";send_email(token,','.join(approvers),review_subject,make_review(date_display,new.get("approval_url",f"/lhos/approve/{did}"),email_html,f"Revision {count} applied from {actor}"),sender_email,sender_name)
-        state.update({"stage":"review_sent","draft_id":did,"review_subject":review_subject,"raw_content":revised,"revision_count":count,"approved_by":None,"approval_channel":None,"last_revision_by":actor,"last_revision_channel":channel,"updated_at":now_et().isoformat()});st[date_key]=state;save_state(st);return {"action":"revised_review_sent","draft_id":did,"revision_count":count,"actor":actor}
+        revised=revise_with_glm(state.get("raw_content",draft.get("text_body","")),text);count=int(state.get("revision_count",0))+1
+        return prepare_from_raw(date_key,date_display,revised,{"type":"authenticated_review_revision","actor":actor,"channel":channel,"revision_count":count},token,False,f"Revision {count} applied from {actor}",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Revision {count})",replaces_draft_id=state["draft_id"])
     @router.get("/connectors")
     async def connectors(req:Request):
         auth(req);token=get_token();checks={}
@@ -367,13 +417,16 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def prepare(req:Request,dry_run:bool=False):
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
-        with automation_lock(): heartbeat("prepare");return prepare_impl(dry_run=dry_run)
+        with automation_lock():
+            if not dry_run:heartbeat("prepare")
+            return prepare_impl(dry_run=dry_run)
     @router.post("/check-replies")
     async def check_replies(req:Request,dry_run:bool=False):
         auth(req)
         if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
         with automation_lock():
-            heartbeat("check_replies");date_key,date_display=current();st=state_all();state=st.get(date_key)
+            if not dry_run:heartbeat("check_replies")
+            date_key,date_display=current();st=state_all();state=st.get(date_key)
             if not state:return {"action":"no_state"}
             if state.get("stage") in ("sent","sent_external"):return {"action":"daily_complete","stage":state.get("stage"),"draft_id":state.get("draft_id")}
             token=get_token();processed=set(load(PROCESSED_FILE,[]));allowed={a.strip().lower() for a in approval_senders}
@@ -416,15 +469,18 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                             processed.add(rec["id"]);actions.append({"action":"ignored_unrelated_or_incomplete","message_id":rec["id"]});continue
                 elif stage in ("review_sent","approved"):
                     kind=classify_instruction(body);thread_bound=bool(current_state.get('review_subject') and current_state.get('review_subject').lower() in subj.lower())
-                    if not (thread_bound or relevant):processed.add(rec["id"]);actions.append({"action":"ignored_unrelated","message_id":rec["id"]});continue
-                    if dry_run:return {"action":f"would_{kind}","message_id":rec['id'],"source":"inbox"}
-                    ok_content,_=validate_daily_content(body)
-                    if ok_content and len(body)>=180:
-                        result=prepare_from_raw(date_key,date_display,body,{"type":"authorized_replacement_email","message_id":rec["id"],"from":addr},token,False,f"Replacement content received from {addr}")
-                        drafts=load_drafts();old=drafts.get(current_state.get('draft_id'))
-                        if old and old.get('status')!='sent':old['status']='revised';save_drafts(drafts)
+                    if not thread_bound:
+                        generated=(current_state.get("source") or {}).get("type")=="iris_generated";complete,_=validate_daily_content(body);reference=usable_reference(body) if relevant else ""
+                        if generated and complete:
+                            result=prepare_from_raw(date_key,date_display,body,{"type":"authenticated_direct_human_update","message_id":rec["id"],"from":addr},token,dry_run,"Human source replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=current_state.get("draft_id"))
+                        elif generated and reference:
+                            bundle=generate_fallback_bundle(date_key,reference);source={"type":"iris_generated","topic_id":bundle.get("topic_id"),"generator":bundle.get("generator"),"reference_used":True,"reference_source":{"message_id":rec["id"],"from":addr}}
+                            result=prepare_from_raw(date_key,date_display,bundle["raw"],source,token,dry_run,"Authenticated reference replaced Iris fallback",composed_sections=bundle["sections"],intro=bundle["intro"],subject=bundle["subject"],review_subject=f"[REVIEW] LifeHouse OS Iris Fallback Draft - {date_display} (Reference Update)",replaces_draft_id=current_state.get("draft_id"))
+                        else:
+                            processed.add(rec["id"]);actions.append({"action":"ignored_unbound_message","message_id":rec["id"]});continue
+                    elif dry_run:return {"action":f"would_{kind}","message_id":rec['id'],"source":"inbox"}
                     else:
-                        result=apply_instruction(date_key,date_display,current_state,addr,body,token,"email")
+                        result=apply_instruction(date_key,date_display,current_state,addr,body,token,"authenticated_review_reply")
                         if result.get("action")=="clarification_needed":
                             clarification_subject=f"[IRIS REVIEW CLARIFICATION NEEDED] {current_state.get('review_subject')}";clarification_body=f"<p>Hi Bobby,</p><p>An authorized reviewer ({html.escape(addr)}) replied to today's review, but IRIS could not determine whether it was approval, hold, or a revision request.</p><p>No beta email will be sent until the instruction is clear.</p><p>Warm regards,<br>Iris</p>";send_email(token,ALERT_EMAIL,clarification_subject,clarification_body,sender_email,sender_name)
                 else:processed.add(rec["id"]);actions.append({"action":"no_op","stage":stage,"message_id":rec["id"]});continue
@@ -435,45 +491,11 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     @router.post("/decision")
     async def decision(req:Request,dry_run:bool=False):
         auth(req)
-        if not dry_run and not (7 <= now_et().hour < 15):return {"action":"outside_active_window","window":"07:00-15:00 America/New_York"}
-        with automation_lock():
-            payload=await req.json();actor=str(payload.get("actor","")).strip();text=str(payload.get("text","")).strip();channel=str(payload.get("channel","disabled")).strip().lower();message_id=str(payload.get("message_id","")).strip()
-            if channel=="imessage" and not IMESSAGE_ENABLED:raise HTTPException(status_code=410,detail="LHOS iMessage integration is disabled by policy")
-            if actor not in ("Kristina","Thomas Appling","Bobby"):raise HTTPException(status_code=403,detail="Actor is not an authorized approver")
-            if not message_id or not text:raise HTTPException(status_code=400,detail="message_id and text are required")
-            key=f"{channel}:{message_id}";processed=set(load(PROCESSED_FILE,[]))
-            if key in processed:return {"action":"already_processed","message_id":message_id}
-            date_key,date_display=current();st=state_all();state=st.get(date_key)
-            if not state:return {"action":"no_state"}
-            token=get_token()
-            if state.get("stage")=="hold":
-                if re.search(r'\b(updated|uploaded|ready|revised|fixed)\b',text,re.I):result=prepare_impl(force=True)
-                elif len(text)>=180:result=prepare_from_raw(date_key,date_display,text,{"type":channel,"message_id":message_id,"actor":actor},token,False,f"Updated content received from {actor}")
-                else:result={"action":"clarification_needed","actor":actor}
-            elif state.get("stage") in ("review_sent","approved"):
-                if dry_run:return {"action":f"would_{classify_instruction(text)}","actor":actor}
-                result=apply_instruction(date_key,date_display,state,actor,text,token,channel)
-            else:result={"action":"no_op","stage":state.get("stage")}
-            if not dry_run:
-                processed.add(key);atomic_json_write(PROCESSED_FILE,sorted(processed))
-            return result
+        raise HTTPException(status_code=410,detail="Machine-token decision intake is disabled; use an authenticated reply to the current bound review email")
     @router.post("/manual-send")
     async def manual_send(req:Request,dry_run:bool=False):
         auth(req)
-        with automation_lock():
-            payload=await req.json();date_key,date_display=current();expected=f"SEND {date_key} LATE TO ACTIVE BETA TESTERS"
-            if payload.get("date")!=date_key or payload.get("confirm")!=expected:
-                raise HTTPException(status_code=400,detail="Exact current-date late-send confirmation is required")
-            if now_et().hour < 15:raise HTTPException(status_code=409,detail="Manual late-send override is available only after the 3 PM deadline")
-            token=get_token();subject=f"LifeHouse OS Beta Update - {date_display}"
-            if gmail_subject_sent_any(token,subject,date_key):return {"action":"already_sent","subject":subject}
-            f,raw,meta=drive_source(token,date_key);ok,reasons=validate_daily_content(raw)
-            if not ok:raise HTTPException(status_code=409,detail={"message":"Current Drive content is invalid","reasons":reasons,"source":meta})
-            sections=deterministic_sections(raw);email_html=build_beta_email(sections,date_display)
-            if dry_run:return {"action":"would_manual_send","subject":subject,"source":meta,"content_chars":len(raw),"confirm":expected}
-            created=create_draft(subject,email_html,raw,date_display);did=created["draft_id"];approval=approve_draft(did,"Bobby explicit late-send authorization",manual_override=True)
-            st=state_all();state={"date":date_key,"date_display":date_display,"stage":"approved","content_valid":True,"draft_id":did,"subject":subject,"source":meta,"raw_content":raw,"approved_by":"Bobby","approval_channel":"explicit chat authorization","approved_at":now_et().isoformat(),"manual_override":True,"updated_at":now_et().isoformat()};st[date_key]=state;save_state(st)
-            result=send_draft(did,"Bobby explicit late-send authorization");state["stage"]=result.get("status","partial");state["updated_at"]=now_et().isoformat();st=state_all();st[date_key]=state;save_state(st);return {"action":"manual_send_executed","draft_id":did,"approval":approval,**result}
+        raise HTTPException(status_code=410,detail="Machine-token late-send override is disabled; create a new reviewed edition instead")
     def record_not_sent(date_key,date_display,state,reason):
         """Persist the failed-closed business outcome before touching Gmail.
 
@@ -486,6 +508,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     def notify_not_sent(date_key,date_display,state,reason,dry_run):
         subject=f"[NOT SENT] LifeHouse OS beta update - {date_display}"
         if dry_run:return {"action":"would_notify_not_sent","reason":reason,"stage":state.get("stage") if state else None}
+        if dry_run:return {"action":"would_notify_not_sent","reason":reason,"notification":"not_sent"}
         base=record_not_sent(date_key,date_display,state,reason);notification="already_sent"
         try:
             token=get_token()
@@ -499,8 +522,15 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def auto_send(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            heartbeat("auto_send_started")
+            if not dry_run:heartbeat("auto_send_started")
             if now_et().hour < 15:return {"action":"too_early","scheduled_for":"15:00 America/New_York"}
+            if dry_run:
+                date_key,date_display=current();state=state_all().get(date_key)
+                if not state:return {"action":"would_notify_not_sent","reason":"No dated content or review state was available by the 3:00 PM deadline."}
+                draft=load_drafts().get(state.get("draft_id"),{})
+                if state.get("stage") in ("sending","partial"):return {"action":"would_reconcile","stage":state.get("stage")}
+                if state.get("content_valid") and draft.get("status")=="approved":return {"action":"would_send_approved","draft_id":state.get("draft_id"),"approved_by":draft.get("approved_by")}
+                return {"action":"would_notify_not_sent","reason":"No authorized approved draft is available."}
             def complete(result):
                 if not dry_run:heartbeat("auto_send")
                 return result
@@ -511,24 +541,32 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
             drafts=load_drafts();draft=drafts.get(state.get('draft_id'),{})
             if draft.get('status')=='sent':state['stage']='sent';state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return complete({"action":"already_sent"})
             if draft.get('status')=='approved' and (state.get("source") or {}).get("type")=="iris_generated":
-                try:
-                    _,gate_raw,_=drive_source(get_token(),date_key);gate_has_human,_=validate_daily_content(gate_raw)
-                except Exception:
-                    return complete(notify_not_sent(date_key,date_display,state,"Iris fallback was approved, but the final human-source recheck failed closed.",dry_run))
-                if gate_has_human:
-                    return complete(notify_not_sent(date_key,date_display,state,"Valid human content arrived after the Iris fallback approval and requires a new review.",dry_run))
+                try:supersession=generated_supersession(get_token(),date_key)
+                except Exception:return complete(notify_not_sent(date_key,date_display,state,"Iris fallback was approved, but the final human-source recheck failed closed.",dry_run))
+                if supersession:return complete(notify_not_sent(date_key,date_display,state,"Authenticated human content or reference arrived after Iris fallback approval and requires a new review.",dry_run))
             if draft.get('status')=='approved' and state.get('content_valid'):
                 state['stage']='approved';st[date_key]=state;save_state(st)
             if state.get('stage')!='approved' or draft.get('status')!='approved' or not state.get('content_valid'):
                 reason=("No authorized approver gave clear final approval." if state.get('content_valid') else "The dated source was missing or invalid.")+(f" Send policy in effect: {SEND_POLICY}." if SEND_POLICY=="ON_APPROVAL" else "")
                 return complete(notify_not_sent(date_key,date_display,state,reason,dry_run))
             if dry_run:return {"action":"would_send_approved","draft_id":state.get('draft_id'),"approved_by":draft.get('approved_by')}
+            if (state.get("source") or {}).get("type")=="iris_generated":
+                try:supersession=generated_supersession(get_token(),date_key)
+                except Exception:return complete(notify_not_sent(date_key,date_display,state,"Iris fallback final source binding could not be verified and failed closed.",False))
+                if supersession:return complete(notify_not_sent(date_key,date_display,state,"Human content changed during the final send transition and requires a new review.",False))
             result=send_draft(state['draft_id'],draft.get('approved_by') or 'approved@n8n');state['stage']=result.get('status','partial');state['updated_at']=now_et().isoformat();st[date_key]=state;save_state(st);return complete(result)
     @router.post("/reconcile")
     async def reconcile(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            heartbeat("reconcile");date_key,date_display=current();st=state_all();state=st.get(date_key)
+            if not dry_run:heartbeat("reconcile")
+            date_key,date_display=current();st=state_all();state=st.get(date_key)
+            if dry_run:
+                if not state:return {"action":"would_notify_not_sent" if now_et().hour>=15 else "no_state"}
+                draft=load_drafts().get(state.get("draft_id"),{})
+                if draft.get("status")=="sent":return {"action":"already_sent"}
+                if bool(draft.get("approved_by")) and draft.get("status") in ("sending","partial","approved"):return {"action":"would_reconcile","draft_id":state.get("draft_id"),"draft_status":draft.get("status")}
+                return {"action":"no_op","stage":state.get("stage"),"draft_status":draft.get("status")}
             if not state:
                 if now_et().hour>=15:return notify_not_sent(date_key,date_display,None,"No dated content or review state was available by the 3:00 PM deadline.",dry_run)
                 return {"action":"no_state"}
@@ -545,7 +583,8 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def close_out(req:Request,dry_run:bool=False):
         auth(req)
         with automation_lock():
-            heartbeat("close_out");date_key,date_display=current();state=state_all().get(date_key) or {};reports=load(REPORTS_FILE,{})
+            if not dry_run:heartbeat("close_out")
+            date_key,date_display=current();state=state_all().get(date_key) or {};reports=load(REPORTS_FILE,{})
             if reports.get(date_key) and not dry_run:return {"action":"already_reported","date":date_key,"stage":reports[date_key].get("stage")}
             if not state and now_et().hour>=15:
                 reason="No dated content or review state was available by the 3:00 PM deadline."
@@ -560,10 +599,10 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 stt=(r or {}).get("status") if isinstance(r,dict) else None
                 if stt in counts:counts[stt]+=1
                 elif stt:counts["reserved"]+=1
-            terminal={"sent":"DELIVERED","sent_external":"DELIVERED","not_sent":"NOT SENT (failed closed)","hold":"HELD - content missing or invalid","approved":"APPROVED, DELIVERY INCOMPLETE","partial":"PARTIAL DELIVERY","review_sent":"AWAITING APPROVAL","no_state":"NO ACTIVITY RECORDED"}.get(stage,stage.upper())
+            terminal={"sent":"DELIVERED","sent_external":"DELIVERED","not_sent":"NOT SENT (failed closed)","hold":"HELD - content missing or invalid","approved":"APPROVED, DELIVERY INCOMPLETE","partial":"PARTIAL DELIVERY","review_sent":"AWAITING APPROVAL","review_pending":"REVIEW DELIVERY PENDING","no_state":"NO ACTIVITY RECORDED"}.get(stage,stage.upper())
             # A failed-closed day whose content WAS valid still needs human attention:
             # the edition did not reach beta testers even though usable content existed.
-            incident=stage in ("approved","partial","sending","review_sent","hold","no_state") or (stage=="not_sent" and bool(state.get("content_valid")))
+            incident=stage in ("approved","partial","sending","review_sent","review_pending","hold","no_state") or (stage=="not_sent" and bool(state.get("content_valid")))
             hb=load(HEARTBEAT_FILE,{})
             rows="".join(f"<tr><td style='padding:4px 12px 4px 0'>{html.escape(k)}</td><td style='padding:4px 0'><strong>{v}</strong></td></tr>" for k,v in [
                 ("Business date",date_display),("Send policy",SEND_POLICY),("Outcome",terminal),
@@ -581,8 +620,10 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
     async def watchdog(req:Request,dry_run:bool=False,source:str="cloud"):
         auth(req)
         with automation_lock():
-            source="core" if source.lower()=="core" else "cloud";heartbeat(f"watchdog_{source}")
-            if source=="cloud":heartbeat("watchdog")  # backward-compatible independent-cloud evidence
+            source="core" if source.lower()=="core" else "cloud"
+            if not dry_run:
+                heartbeat(f"watchdog_{source}")
+                if source=="cloud":heartbeat("watchdog")  # backward-compatible independent-cloud evidence
             date_key,date_display=current();now=now_et();state=state_all().get(date_key);hb=load(HEARTBEAT_FILE,{});reason=None
             if now.hour < 7:return {"action":"too_early","time":now.isoformat()}
             if 7 <= now.hour < 15:
@@ -597,7 +638,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 else:return {"action":"healthy_active_window","stage":state.get("stage") if state else None,"last_prepare_at":stamp}
             elif not state:reason="No cloud automation state exists after 3:00 PM ET; the preparation schedule may have been missed."
             elif state.get("stage") in ("sending","partial","approved"):reason=f"Authorized batch is stuck in {state.get('stage')} and requires reconciliation."
-            elif state.get("stage") in ("review_sent","hold"):reason=f"The 3:00 PM deadline handler did not finalize stage {state.get('stage')}."
+            elif state.get("stage") in ("review_sent","review_pending","hold"):reason=f"The 3:00 PM deadline handler did not finalize stage {state.get('stage')}."
             if not reason:return {"action":"healthy_or_expected_terminal_state","stage":state.get("stage") if state else None}
             key=hashlib.sha256((date_key+reason).encode()).hexdigest();alerts=load(ALERTS_FILE,{})
             if alerts.get(key):return {"action":"alert_already_sent","reason":reason}

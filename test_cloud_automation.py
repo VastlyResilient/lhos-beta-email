@@ -7,6 +7,7 @@ import cloud_automation as ca
 class CloudTests(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory();root=Path(self.t.name);ca.STATE_FILE=root/'state.json';ca.PROCESSED_FILE=root/'processed.json';ca.ALERTS_FILE=root/'alerts.json';ca.HEARTBEAT_FILE=root/'heartbeat.json';ca.REPORTS_FILE=root/'reports.json';ca.SEND_POLICY='ON_APPROVAL';ca.AUTOMATION_LOCK=root/'automation.lock';ca.AUTOMATION_TOKEN='secret';ca.END_DATE='';ca.IMESSAGE_ENABLED=False;ca.ALERT_EMAIL='bobbyatf@gmail.com'
+  self._gmail_search_patcher=patch.object(ca,'gmail_search',return_value=[]);self._gmail_search_patcher.start();self.addCleanup(self._gmail_search_patcher.stop)
  def tearDown(self):self.t.cleanup()
  def app(self,send_email=lambda *a:(_ for _ in ()).throw(AssertionError('send called')),send_draft=lambda *a:(_ for _ in ()).throw(AssertionError('send draft called')),approve_draft=lambda *a,**k:{'status':'approved'},initial_drafts=None,get_token=lambda:'tok'):
   app=FastAPI(); drafts=dict(initial_drafts or {}); self._drafts=drafts
@@ -38,11 +39,11 @@ class CloudTests(unittest.TestCase):
   self.assertEqual(ca.classify_instruction('Thanks'),'ambiguous')
  def test_unauthorized(self):
   self.assertEqual(self.app().get('/api/lhos/automation/status').status_code,401)
- def test_watchdog_records_cloud_heartbeat(self):
+ def test_watchdog_dry_run_does_not_record_heartbeat(self):
   at=ca.datetime(2030,1,1,10,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');fresh=at.isoformat();ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'hold','content_valid':False}});ca.atomic_json_write(ca.HEARTBEAT_FILE,{'prepare':fresh})
   with patch.object(ca,'now_et',return_value=at):
    r=self.app().post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
-  self.assertEqual(r.status_code,200);self.assertEqual(ca.load(ca.HEARTBEAT_FILE,{})['watchdog'],fresh)
+  self.assertEqual(r.status_code,200);self.assertNotIn('watchdog',ca.load(ca.HEARTBEAT_FILE,{}))
  def test_watchdog_dry_run_never_sends(self):
   with patch.object(ca,'now_et',return_value=ca.datetime(2030,1,1,16,0,tzinfo=ca.ET)):
    r=self.app().post('/api/lhos/automation/watchdog?dry_run=true',headers={'x-lhos-automation-token':'secret'})
@@ -69,7 +70,7 @@ class CloudTests(unittest.TestCase):
   at=ca.datetime(2030,1,1,10,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');ca.atomic_json_write(ca.STATE_FILE,{date:{'stage':'hold','content_valid':False}});ca.atomic_json_write(ca.HEARTBEAT_FILE,{'prepare':at.isoformat()})
   with patch.object(ca,'now_et',return_value=at):
    r=self.app().post('/api/lhos/automation/watchdog?dry_run=true&source=core',headers={'x-lhos-automation-token':'secret'})
-  self.assertEqual(r.status_code,200);hb=ca.load(ca.HEARTBEAT_FILE,{});self.assertEqual(hb['watchdog_core'],at.isoformat());self.assertNotIn('watchdog_cloud',hb)
+  self.assertEqual(r.status_code,200);hb=ca.load(ca.HEARTBEAT_FILE,{});self.assertNotIn('watchdog_core',hb);self.assertNotIn('watchdog_cloud',hb)
 
 
 
@@ -97,18 +98,18 @@ class CloudTests(unittest.TestCase):
    app=self.app(send_email=lambda *a:sent.append(a));first=app.post('/api/lhos/automation/reconcile',headers={'x-lhos-automation-token':'secret'});second=app.post('/api/lhos/automation/reconcile',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(first.json()['action'],'not_sent');self.assertEqual(second.json()['action'],'daily_complete');self.assertEqual(len(sent),1);self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['stage'],'not_sent')
 
- def test_revision_persists_new_draft_and_supersedes_old(self):
+ def test_machine_token_revision_is_disabled(self):
   at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);date=at8.strftime('%Y-%m-%d');raw='Daily Beta Notes\nA concrete beta update describes testing and feedback from users.\nWhat Changed\nThe dashboard has a revised navigation flow with clearer labels.\nHelpful Reminder\nPlease continue testing and report any specific issue.\nThank You\nThank you for the detailed feedback and continued beta participation.'
   ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'July 23, 2026','stage':'review_sent','content_valid':True,'draft_id':'old','subject':'S','review_subject':'[REVIEW] S','raw_content':raw}})
   sent=[];app=self.app(send_email=lambda *a:sent.append(a),initial_drafts={'old':{'id':'old','status':'pending_approval','text_body':raw}})
   with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'revise_with_glm',return_value=raw.replace('clearer labels','clearer labels and revised colors')):
    r=app.post('/api/lhos/automation/decision',headers={'x-lhos-automation-token':'secret'},json={'actor':'Kristina','text':'change the labels','message_id':'m-revise','channel':'email'})
-  self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'revised_review_sent');newid=r.json()['draft_id'];self.assertIn(newid,self._drafts);self.assertEqual(self._drafts['old']['status'],'revised');self.assertEqual(len(sent),1)
+  self.assertEqual(r.status_code,410);self.assertEqual(self._drafts['old']['status'],'pending_approval');self.assertEqual(sent,[])
  def test_imessage_decision_channel_is_disabled(self):
   at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0)
   with patch.object(ca,'now_et',return_value=at8):
    r=self.app().post('/api/lhos/automation/decision',headers={'x-lhos-automation-token':'secret'},json={'actor':'Kristina','text':'approve','message_id':'m1','channel':'imessage'})
-  self.assertEqual(r.status_code,410);self.assertIn('disabled by policy',r.json()['detail'])
+  self.assertEqual(r.status_code,410);self.assertIn('decision intake is disabled',r.json()['detail'])
  def test_missing_content_alert_goes_only_to_bobby(self):
   at8=ca.now_et().replace(hour=8,minute=0,second=0,microsecond=0);sent=[]
   with patch.object(ca,'now_et',return_value=at8),patch.object(ca,'drive_source',return_value=(None,'',{'name':None})),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'generate_fallback_bundle',side_effect=RuntimeError('generation failed')):
@@ -120,22 +121,22 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'now_et',return_value=at15),patch.object(ca,'gmail_subject_sent_any',return_value=False):
    r=self.app(send_email=lambda *a:sent.append(a),initial_drafts={'id':{'status':'pending_approval'}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(r.json()['action'],'not_sent');self.assertEqual(len(sent),1);self.assertEqual(sent[0][1],'bobbyatf@gmail.com')
- def test_manual_late_send_requires_exact_confirmation(self):
+ def test_manual_late_send_endpoint_is_disabled(self):
   at16=ca.now_et().replace(hour=16,minute=0,second=0,microsecond=0)
   with patch.object(ca,'now_et',return_value=at16):
    r=self.app().post('/api/lhos/automation/manual-send',headers={'x-lhos-automation-token':'secret'},json={'date':at16.strftime('%Y-%m-%d'),'confirm':'send it'})
-  self.assertEqual(r.status_code,400)
- def test_manual_late_send_dry_run_is_non_sending(self):
+  self.assertEqual(r.status_code,410)
+ def test_manual_late_send_dry_run_is_also_disabled(self):
   at16=ca.now_et().replace(hour=16,minute=0,second=0,microsecond=0);date=at16.strftime('%Y-%m-%d');raw='Daily Beta Notes\nA concrete beta update describes testing and feedback from users.\nWhat Changed\nThe dashboard has a revised navigation flow with clearer labels.\nHelpful Reminder\nPlease continue testing and report any specific issue.\nThank You\nThank you for the detailed feedback and continued beta participation.'
   with patch.object(ca,'now_et',return_value=at16),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'x.docx'})):
    r=self.app().post('/api/lhos/automation/manual-send?dry_run=true',headers={'x-lhos-automation-token':'secret'},json={'date':date,'confirm':f'SEND {date} LATE TO ACTIVE BETA TESTERS'})
-  self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'would_manual_send')
- def test_manual_late_send_happy_path_calls_delivery_once(self):
+  self.assertEqual(r.status_code,410)
+ def test_manual_late_send_cannot_call_delivery(self):
   at16=ca.now_et().replace(hour=16,minute=0,second=0,microsecond=0);date=at16.strftime('%Y-%m-%d');raw='Daily Beta Notes\nA concrete beta update describes testing and feedback from users.\nWhat Changed\nThe dashboard has a revised navigation flow with clearer labels.\nHelpful Reminder\nPlease continue testing and report any specific issue.\nThank You\nThank you for the detailed feedback and continued beta participation.';calls=[];approvals=[]
   app=self.app(send_draft=lambda *a:(calls.append(a) or {'status':'sent','recipient_count':2,'newly_sent_count':2,'errors':[]}),approve_draft=lambda *a,**k:(approvals.append((a,k)) or {'status':'approved'}))
   with patch.object(ca,'now_et',return_value=at16),patch.object(ca,'gmail_subject_sent_any',return_value=False),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'x.docx'})):
    r=app.post('/api/lhos/automation/manual-send',headers={'x-lhos-automation-token':'secret'},json={'date':date,'confirm':f'SEND {date} LATE TO ACTIVE BETA TESTERS'})
-  self.assertEqual(r.status_code,200);self.assertEqual(r.json()['action'],'manual_send_executed');self.assertEqual(len(calls),1);self.assertTrue(approvals[0][1]['manual_override'])
+  self.assertEqual(r.status_code,410);self.assertEqual(calls,[]);self.assertEqual(approvals,[])
  def _gmail_message(self,mid,from_addr,subject,body,internal,auth='dkim=pass header.i=@example.com; spf=pass; dmarc=pass'):
   enc=base64.urlsafe_b64encode(body.encode()).decode().rstrip('=')
   hs=[{'name':'From','value':from_addr},{'name':'Subject','value':subject}]
@@ -285,10 +286,10 @@ class CloudTests(unittest.TestCase):
   self.assertTrue(ca.is_auto_submitted(self._pl(('Auto-Submitted','auto-replied'))))
   self.assertTrue(ca.is_auto_submitted(self._pl(('Precedence','list'))))
   self.assertFalse(ca.is_auto_submitted(self._pl(('Auto-Submitted','no'))))
- def test_arc_fallback_only_when_no_primary(self):
+ def test_arc_results_are_never_trusted_without_verified_chain(self):
   pay=self._pl(('ARC-Authentication-Results','mx.google.com; dkim=pass header.i=@example.com; dmarc=pass'))
   ok,v=ca.sender_authenticated('a@example.com',pay)
-  self.assertTrue(ok);self.assertEqual(v['source'],'arc-authentication-results')
+  self.assertFalse(ok);self.assertEqual(v['basis'],'no_auth_results')
  def _fallback_bundle(self):
   raw=('Today’s Beta Notes\nUse one real household situation to test a clearer routine. '*5+'\nToday’s Beta Mission\nChoose one transition, try the steps, and share specific feedback. '*4+'\nThank You\nThank you for helping make household life more intentional.')
   return {'subject':'LifeHouse OS Daily Briefing - January 02, 2030','intro':'Today combines a practical household system with a focused beta mission.','sections':[{'title':'Today’s Beta Notes','body':'Small tests can reveal useful improvements for everyday household life.'},{'title':'Today’s Beta Mission','body':'Choose one real household transition and note what feels clear, where you hesitate, and what would help.'},{'title':'A Household Win','body':'List what must happen today, what would be helpful, and what can safely wait.'},{'title':'A Question for Your House','body':'Which household transition creates the most friction right now?'},{'title':'Thank You','body':'Thank you for testing thoughtfully and sharing specific feedback.'}],'raw':raw,'topic_id':'work-home-handoff','generator':'test'}
@@ -337,4 +338,13 @@ class CloudTests(unittest.TestCase):
   with patch.object(ca,'now_et',return_value=at),patch.object(ca,'drive_source',return_value=({'id':'f'},raw,{'name':'300102.docx'})),patch.object(ca,'gmail_subject_sent_any',return_value=False):
    r=self.app(send_email=lambda *a:sent.append(a),initial_drafts={'id':{'id':'id','status':'approved','approved_by':'Kristina'}}).post('/api/lhos/automation/auto-send',headers={'x-lhos-automation-token':'secret'})
   self.assertEqual(r.json()['action'],'not_sent');self.assertIn('requires a new review',r.json()['reason']);self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['stage'],'not_sent');self.assertEqual(sent[0][1],'bobbyatf@gmail.com')
+ def test_human_source_appearing_between_approval_checks_revokes_send(self):
+  at=ca.datetime(2030,1,2,9,0,tzinfo=ca.ET);date=at.strftime('%Y-%m-%d');generated=self._fallback_bundle()['raw'];review='[REVIEW] Fallback [draft:id]'
+  ca.atomic_json_write(ca.STATE_FILE,{date:{'date':date,'date_display':'January 02, 2030','stage':'review_sent','content_valid':True,'draft_id':'id','subject':'Generated','review_subject':review,'raw_content':generated,'source':{'type':'iris_generated'}}})
+  valid=('Today we fixed the household dashboard and provided concrete beta testing guidance and feedback steps. '*6);msg=self._gmail_message('approve-race','a@example.com','Re: '+review,'Approved',1000);beta=[];reviews=[]
+  def approve(did,actor):self._drafts[did].update({'status':'approved','approved_by':actor});return {'status':'approved'}
+  app=self.app(send_email=lambda *a:reviews.append(a),send_draft=lambda *a:beta.append(a),approve_draft=approve,initial_drafts={'id':{'id':'id','status':'pending_approval','subject':'Generated','html_body':'x','text_body':generated,'date':'January 02, 2030'}})
+  with patch.object(ca,'now_et',return_value=at),patch.object(ca,'gmail_search',return_value=[{'id':'approve-race'}]),patch.object(ca,'gmail_get',return_value=msg),patch.object(ca,'drive_source',side_effect=[(None,'',{'missing':True}),({'id':'f'},valid,{'id':'f','name':'300102.docx'})]),patch.object(ca,'gmail_subject_sent_any',return_value=False):
+   r=app.post('/api/lhos/automation/check-replies',headers={'x-lhos-automation-token':'secret'})
+  self.assertEqual(beta,[]);self.assertEqual(r.json()['results'][0]['action'],'review_sent');self.assertEqual(ca.load(ca.STATE_FILE,{})[date]['source']['name'],'300102.docx');self.assertEqual(len(reviews),1)
 if __name__=='__main__':unittest.main()

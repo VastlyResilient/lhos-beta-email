@@ -108,6 +108,7 @@ def _edition(now,state):
     stage=state.get("stage") or "no_state";valid=bool(state.get("content_valid"));source=(state.get("source") or {}).get("name") or now.strftime("%y%m%d")+".docx"
     labels={
         "hold":("orange","Waiting for content",f"{source} is missing or not yet valid. IRIS keeps checking every minute until 2:59 PM ET."),
+        "review_pending":("orange","Finalizing review delivery","The draft is saved safely and IRIS is completing delivery of the authenticated review email."),
         "review_sent":("orange","Review in progress","Valid content was prepared and the current draft is waiting for an authenticated decision."),
         "approved":("orange","Approved; delivery pending","The current draft is authorized and the delivery path is active."),
         "sending":("orange","Delivery in progress","IRIS is sending and reconciling the authorized recipient batch."),
@@ -124,7 +125,7 @@ def _edition(now,state):
     else:light,label,detail=labels.get(stage,("orange",stage.replace('_',' ').title(),"IRIS recorded this state without inventing an interpretation."))
     steps=[];order=[("content","Content"),("review","Review"),("approval","Approval"),("delivery","Delivery")];done=set();current=None
     if stage=="hold":current="content"
-    elif stage=="review_sent":done={"content"};current="review"
+    elif stage in ("review_pending","review_sent"):done={"content"};current="review"
     elif stage=="approved":done={"content","review","approval"};current="delivery"
     elif stage in ("sending","partial"):done={"content","review","approval"};current="delivery"
     elif stage in ("sent","sent_external"):done={x[0] for x in order}
