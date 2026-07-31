@@ -339,6 +339,11 @@ async def lhos_security_policy(request: Request):
         "signed_link_production_approval": False,
         "machine_token_test_approval": True,
         "production_approval_evidence": "authenticated_bound_review_email",
+        "iris_creative_fallback": True,
+        "iris_creative_requires_review": True,
+        "iris_creative_failover": "validated_curated",
+        "iris_creative_model": os.getenv("IRIS_CREATIVE_MODEL", "glm-4.7-flash"),
+        "iris_creative_provider_configured": bool(os.getenv("GLM_API_KEY")),
     }
 
 @app.get("/api/lhos/drafts/{draft_id}")

@@ -109,11 +109,12 @@ class SecurityHardeningTests(unittest.TestCase):
             with self.assertRaises(RuntimeError) as raised:ca.revise_with_glm("safe original","safe feedback")
         self.assertNotIn("SECRET_PROVIDER_BODY",str(raised.exception))
 
-    def test_fallback_publication_never_calls_model_provider(self):
-        with patch.object(fallback.httpx, "post") as post:
-            bundle = fallback.generate_bundle(date(2030, 1, 2), "travel packing reference", "configured-key", "https://provider.example")
-        post.assert_not_called()
-        self.assertEqual(bundle["generator"], "curated-v1")
+    def test_unsafe_creative_provider_output_never_reaches_review(self):
+        class Response:
+            status_code=200
+            def json(self):return {"choices":[{"message":{"content":"{\"subject\":\"LifeHouse OS Daily Briefing — Unsafe\",\"intro\":\"A sufficiently long but unsafe creative introduction for today’s briefing.\",\"sections\":[{\"title\":\"Today’s Beta Notes\",\"body\":\"Sprint 9 launches tomorrow with a new feature and a guaranteed result.\"}]}"}}]}
+        with patch.object(fallback.httpx,"post",return_value=Response()):bundle=fallback.generate_bundle(date(2030,1,2),"","configured-key","https://provider.example")
+        self.assertEqual(bundle["generator"],"curated-v1");self.assertNotIn("Sprint 9",bundle["raw"])
 
     def test_review_state_is_persisted_before_review_delivery(self):
         at = ca.datetime(2030, 1, 2, 7, 30, tzinfo=ca.ET)

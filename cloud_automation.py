@@ -24,6 +24,7 @@ SEND_POLICY=os.getenv("SEND_POLICY","ON_APPROVAL").strip().upper()
 if SEND_POLICY not in ("ON_APPROVAL","AT_GATE"):SEND_POLICY="ON_APPROVAL"
 GLM_API_KEY=os.getenv("GLM_API_KEY","")
 GLM_BASE_URL=os.getenv("GLM_BASE_URL","https://api.z.ai/api/paas/v4")
+IRIS_CREATIVE_MODEL=os.getenv("IRIS_CREATIVE_MODEL","glm-4.7-flash")
 DATA_DIR=Path(os.getenv("DATA_DIR","/data"));STATE_FILE=DATA_DIR/"automation_state.json";PROCESSED_FILE=DATA_DIR/"processed_messages.json";ALERTS_FILE=DATA_DIR/"watchdog_alerts.json";REPORTS_FILE=DATA_DIR/"daily_reports.json";HEARTBEAT_FILE=DATA_DIR/"automation_heartbeat.json";AUTOMATION_LOCK=DATA_DIR/"automation.lock"
 KRISTINA="kristina@freedomforgeai.com"
 ALERT_EMAIL="bobbyatf@gmail.com"  # Policy invariant: ALL operational/failure alerts go only to Bobby.
@@ -31,7 +32,7 @@ IMESSAGE_ENABLED=False  # Policy invariant: LHOS iMessage intake/outbound is dis
 
 def generate_fallback_bundle(date_key, reference=""):
     """Public seam for tests; provider failures fall back to curated copy when no reference exists."""
-    return generate_for_date(date_key, reference, GLM_API_KEY, GLM_BASE_URL)
+    return generate_for_date(date_key, reference, GLM_API_KEY, GLM_BASE_URL, IRIS_CREATIVE_MODEL)
 APPROVAL_PATTERNS=(
     r"^(?:approved|approve|confirmed|lgtm)[.!]*$",
     r"^(?:approved|looks good(?: to me)?|good)[,;: .—-]+(?:please )?(?:send it(?: to (?:the )?beta testers)?|send the email|good to send|go ahead|ship it|release it)[.!]*$",
@@ -380,7 +381,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                 send_email(token,ALERT_EMAIL,action_subject,body,sender_email,sender_name)
             st=state_all();st[date_key]={"date":date_key,"date_display":date_display,"stage":"hold","content_valid":False,"reasons":reasons,"source":meta,"reference_available":bool(reference),"fallback_failed_at":now.isoformat(),"fallback_error":type(exc).__name__,"action_subject":action_subject,"updated_at":now.isoformat()};save_state(st)
             return {"action":"hold","reason":"iris_fallback_generation_failed","reference_available":bool(reference)}
-        generated_source={"type":"iris_generated","topic_id":bundle.get("topic_id"),"generator":bundle.get("generator"),"reference_used":bool(bundle.get("reference_used")),"dated_source":meta}
+        generated_source={"type":"iris_generated","topic_id":bundle.get("topic_id"),"generator":bundle.get("generator"),"creative_model":bundle.get("creative_model"),"creative_attempted":bool(bundle.get("creative_attempted")),"creative_attempt_count":bundle.get("creative_attempt_count"),"creative_fallback_reason":bundle.get("creative_fallback_reason"),"reference_used":bool(bundle.get("reference_used")),"dated_source":meta}
         return prepare_from_raw(date_key,date_display,bundle["raw"],generated_source,token,False,"Iris-generated fallback — no complete dated content was available by 7:30 AM ET",composed_sections=bundle["sections"],intro=bundle["intro"],subject=bundle["subject"],review_subject=f"[REVIEW] LifeHouse OS Iris Fallback Draft - {date_display}")
     def apply_instruction(date_key,date_display,state,actor,text,token,channel):
         kind=classify_instruction(text);st=state_all();drafts=load_drafts();draft=drafts.get(state.get("draft_id"),{})
@@ -501,7 +502,7 @@ def configure_router(*,get_token,send_email,create_draft,load_drafts,save_drafts
                         if generated and complete:
                             result=prepare_from_raw(date_key,date_display,body,{"type":"authenticated_direct_human_update","message_id":rec["id"],"from":addr},token,dry_run,"Human source replaced Iris fallback",review_subject=f"[REVIEW] LifeHouse OS Beta Email Draft - {date_display} (Human Source Update)",replaces_draft_id=current_state.get("draft_id"))
                         elif generated and reference:
-                            bundle=generate_fallback_bundle(date_key,reference);source={"type":"iris_generated","topic_id":bundle.get("topic_id"),"generator":bundle.get("generator"),"reference_used":True,"reference_source":{"message_id":rec["id"],"from":addr}}
+                            bundle=generate_fallback_bundle(date_key,reference);source={"type":"iris_generated","topic_id":bundle.get("topic_id"),"generator":bundle.get("generator"),"creative_model":bundle.get("creative_model"),"creative_attempted":bool(bundle.get("creative_attempted")),"creative_attempt_count":bundle.get("creative_attempt_count"),"creative_fallback_reason":bundle.get("creative_fallback_reason"),"reference_used":True,"reference_source":{"message_id":rec["id"],"from":addr}}
                             result=prepare_from_raw(date_key,date_display,bundle["raw"],source,token,dry_run,"Authenticated reference replaced Iris fallback",composed_sections=bundle["sections"],intro=bundle["intro"],subject=bundle["subject"],review_subject=f"[REVIEW] LifeHouse OS Iris Fallback Draft - {date_display} (Reference Update)",replaces_draft_id=current_state.get("draft_id"))
                         else:
                             processed.add(rec["id"]);actions.append({"action":"ignored_unbound_message","message_id":rec["id"]});continue
