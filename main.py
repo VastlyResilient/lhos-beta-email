@@ -235,21 +235,29 @@ def get_contacts_in_group(access_token: str, group_resource_name: str) -> list:
 
     return contacts
 
-def send_gmail(access_token: str, to: str, subject: str, html_body: str, sender_email: str, sender_name: str, reply_to: str | None = None):
-    """Send an email via Gmail API."""
+def send_gmail(access_token: str, to: str, subject: str, html_body: str, sender_email: str, sender_name: str, reply_to: str | None = None, thread_id: str | None = None, in_reply_to: str | None = None, references: str | None = None, reply_for: str | None = None):
+    """Send an email via Gmail API, optionally as an idempotent in-thread reply."""
     message = MIMEText(html_body, "html")
     message["To"] = to
     message["Subject"] = subject
     message["From"] = f'"{sender_name}" <{sender_email}>'
     if reply_to:
         message["Reply-To"] = reply_to
+    if in_reply_to:
+        message["In-Reply-To"] = in_reply_to
+    if references or in_reply_to:
+        message["References"] = references or in_reply_to
+    if reply_for:
+        message["X-LHOS-Reply-For"] = reply_for
 
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    request_body={"raw":raw}
+    if thread_id:request_body["threadId"]=thread_id
 
     resp = httpx.post(
         "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
         headers={"Authorization": f"Bearer {access_token}"},
-        json={"raw": raw},
+        json=request_body,
         timeout=60,
     )
 
@@ -344,6 +352,12 @@ async def lhos_security_policy(request: Request):
         "iris_creative_failover": "validated_curated",
         "iris_creative_model": os.getenv("IRIS_CREATIVE_MODEL", "glm-4.7-flash"),
         "iris_creative_provider_configured": bool(os.getenv("GLM_API_KEY")),
+        "approver_inbox_agent": True,
+        "approver_inbox_start_date": os.getenv("LHOS_INBOX_AGENT_START_DATE", "2026-08-01"),
+        "authenticated_direct_email_reply": True,
+        "production_inbound_authentication_bypass": False,
+        "authenticated_direct_email_durable_context": True,
+        "direct_email_can_bypass_review": False,
     }
 
 @app.get("/api/lhos/drafts/{draft_id}")
@@ -841,6 +855,7 @@ PUBLIC_URL = os.getenv("LHOS_PUBLIC_URL", _public_domain if _public_domain.start
 app.include_router(configure_router(
     get_token=get_google_access_token,
     send_email=send_gmail,
+    reply_email=send_gmail,
     create_draft=create_draft_record,
     load_drafts=load_drafts,
     save_drafts=save_drafts,

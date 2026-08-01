@@ -14,6 +14,24 @@ FastAPI app for the LifeHouse OS beta daily email approval & send pipeline.
 - `GET /health` — Health check
 
 
+
+## Authenticated Approver Inbox Agent
+
+Beginning **August 1, 2026**, the existing 7:00 AM–3:00 PM America/New_York poll reads every email directly addressed to Iris from the configured Bobby, Kristina, and Thomas allow-list:
+
+- Gmail’s topmost trusted `Authentication-Results` must align with the allow-listed From address; forwarded body text, ARC-only evidence, auto-replies, and forged headers are not authority.
+- Every accepted direct message is classified, recorded once, and answered in its Gmail thread. A deterministic reply marker prevents duplicate acknowledgments after a crash.
+- Complete human copy creates or replaces the current review and goes to all reviewers. It never skips review merely because the submission says “send this version.”
+- Editorial corrections and durable beta-status guidance shape the current or next briefing. Later dated human guidance wins when instructions conflict.
+- A stop/hold message blocks delivery and can persist across dates; an authenticated resume instruction clears the standing hold.
+- A clear approval releases only the exact current review to which the authenticated reviewer replied. Unbound approval language receives a direct clarification request and cannot send.
+- Questions and incomplete guidance receive an in-thread response. Temporary provider failures are acknowledged and retried without requiring the reviewer to resend the message.
+- The inbox keeps message IDs, classifications, and bounded editorial context on the persistent volume; status exposes counts and hold state, never email bodies.
+- Polling continues after the daily beta email reaches a terminal stage so later direct messages still receive a response and can guide the next edition.
+- `dry_run=true` reads and classifies but does not write inbox/state files, call the creative/revision model, create reviews, reply, approve, or deliver.
+
+Historical July 30–31 authenticated direct approver messages are imported as editorial context and acknowledged once when the agent activates. Bobby’s instruction to continue the reviewed workflow beginning August 1 supersedes pre-activation stop language as an operational hold; the underlying relevance and beta-status constraints remain authoritative content guidance.
+
 ## Iris Creative Fallback
 
 When no complete dated human content is available by **7:30 AM America/New_York**, Iris creates an original LifeHouse OS Daily Briefing for review:
@@ -43,6 +61,8 @@ The active generator and safe-failover policy are visible through `GET /api/lhos
 - `GLM_API_KEY` — Z.AI/GLM credential used for Iris creative generation and authenticated review revisions
 - `GLM_BASE_URL` — OpenAI-compatible GLM API base (default: `https://api.z.ai/api/paas/v4`)
 - `IRIS_CREATIVE_MODEL` — Creative fallback model (default: `glm-4.7-flash`)
+- `LHOS_INBOX_AGENT_START_DATE` — Approver Inbox Agent activation date (default: `2026-08-01`)
+- `LHOS_INBOX_CONTEXT_SINCE` — Earliest direct-email date imported as bounded editorial context (default: `2026-07-30`)
 
 ## Google OAuth Bootstrap
 

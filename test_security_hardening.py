@@ -18,17 +18,21 @@ class SecurityHardeningTests(unittest.TestCase):
         root = Path(self.tmp.name)
         ca.STATE_FILE = root / "state.json"
         ca.PROCESSED_FILE = root / "processed.json"
+        ca.INBOX_FILE = root / "inbox.json"
         ca.ALERTS_FILE = root / "alerts.json"
         ca.HEARTBEAT_FILE = root / "heartbeat.json"
         ca.REPORTS_FILE = root / "reports.json"
         ca.AUTOMATION_LOCK = root / "automation.lock"
         ca.AUTOMATION_TOKEN = "secret"
         ca.SEND_POLICY = "ON_APPROVAL"
+        ca.INBOX_AGENT_START_DATE = "1969-01-01"
+        ca.INBOX_CONTEXT_SINCE = "1970-01-01"
+        self._thread_patcher=patch.object(ca,"gmail_thread_reply_sent",return_value=False);self._thread_patcher.start();self.addCleanup(self._thread_patcher.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def app(self, *, send_email=lambda *a: None, create_draft=None, initial_drafts=None, send_draft=None, approve_draft=None):
+    def app(self, *, send_email=lambda *a: None, reply_email=lambda *a: None, create_draft=None, initial_drafts=None, send_draft=None, approve_draft=None):
         drafts = dict(initial_drafts or {})
         def create(subject, html, text, date_value):
             did = "draft-security-123456"
@@ -36,7 +40,7 @@ class SecurityHardeningTests(unittest.TestCase):
             return {"draft_id": did, "approval_url": "/approve"}
         app = FastAPI()
         app.include_router(ca.configure_router(
-            get_token=lambda: "tok", send_email=send_email, create_draft=create_draft or create,
+            get_token=lambda: "tok", send_email=send_email, reply_email=reply_email, create_draft=create_draft or create,
             load_drafts=lambda: drafts, save_drafts=lambda d: None,
             send_draft=send_draft or (lambda *a: (_ for _ in ()).throw(AssertionError("send forbidden"))),
             approve_draft=approve_draft or (lambda *a, **k: (_ for _ in ()).throw(AssertionError("approval forbidden"))),
@@ -76,8 +80,8 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertEqual(ca.load(ca.HEARTBEAT_FILE, {}), {})
 
     def test_all_dry_run_endpoints_leave_every_persistent_file_unchanged(self):
-        at=ca.datetime(2030,1,2,7,0,tzinfo=ca.ET);ca.atomic_json_write(ca.STATE_FILE,{});ca.atomic_json_write(ca.PROCESSED_FILE,[]);ca.atomic_json_write(ca.ALERTS_FILE,{});ca.atomic_json_write(ca.HEARTBEAT_FILE,{});ca.atomic_json_write(ca.REPORTS_FILE,{});ca.AUTOMATION_LOCK.write_text("LOCK-MARKER")
-        paths=(ca.STATE_FILE,ca.PROCESSED_FILE,ca.ALERTS_FILE,ca.HEARTBEAT_FILE,ca.REPORTS_FILE,ca.AUTOMATION_LOCK);baseline={str(p):p.read_bytes() for p in paths};app=self.app()
+        at=ca.datetime(2030,1,2,7,0,tzinfo=ca.ET);ca.atomic_json_write(ca.STATE_FILE,{});ca.atomic_json_write(ca.PROCESSED_FILE,[]);ca.atomic_json_write(ca.INBOX_FILE,{"version":1,"messages":{},"context":[],"standing_hold":None});ca.atomic_json_write(ca.ALERTS_FILE,{});ca.atomic_json_write(ca.HEARTBEAT_FILE,{});ca.atomic_json_write(ca.REPORTS_FILE,{});ca.AUTOMATION_LOCK.write_text("LOCK-MARKER")
+        paths=(ca.STATE_FILE,ca.PROCESSED_FILE,ca.INBOX_FILE,ca.ALERTS_FILE,ca.HEARTBEAT_FILE,ca.REPORTS_FILE,ca.AUTOMATION_LOCK);baseline={str(p):p.read_bytes() for p in paths};app=self.app()
         with patch.object(ca,"now_et",return_value=at),patch.object(ca,"drive_source",return_value=(None,"",{"missing":True})),patch.object(ca,"gmail_subject_sent_any",return_value=False),patch.object(ca,"gmail_search",return_value=[]):
             for endpoint in ("prepare","check-replies","auto-send","reconcile","close-out","watchdog"):
                 r=app.post(f"/api/lhos/automation/{endpoint}?dry_run=true",headers={"x-lhos-automation-token":"secret"});self.assertEqual(r.status_code,200,endpoint);self.assertEqual({str(p):p.read_bytes() for p in paths},baseline,endpoint)
@@ -90,10 +94,10 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertEqual(r.json()["action"],"would_finish_pending_review");self.assertEqual(sent,[]);self.assertEqual(ca.STATE_FILE.read_bytes(),before);self.assertFalse(ca.AUTOMATION_LOCK.exists())
 
     def test_authenticated_approval_reply_dry_run_invokes_no_callbacks_or_writes(self):
-        at=ca.datetime(2030,1,2,9,0,tzinfo=ca.ET);date_key="2030-01-02";draft_id="draft-security-123456";subject="[REVIEW] Daily [draft:draft-security]";state={"date":date_key,"date_display":"January 02, 2030","stage":"review_sent","content_valid":True,"draft_id":draft_id,"subject":"Daily","review_subject":subject,"source":{"type":"iris_generated"},"raw_content":"valid","updated_at":at.isoformat()};ca.atomic_json_write(ca.STATE_FILE,{date_key:state});ca.atomic_json_write(ca.PROCESSED_FILE,[]);paths=(ca.STATE_FILE,ca.PROCESSED_FILE,ca.ALERTS_FILE,ca.HEARTBEAT_FILE,ca.REPORTS_FILE,ca.AUTOMATION_LOCK);baseline={str(p):(p.exists(),p.read_bytes() if p.exists() else None) for p in paths};msg=self.gmail_message("Re: "+subject,"Approved")
+        at=ca.datetime(2030,1,2,9,0,tzinfo=ca.ET);date_key="2030-01-02";draft_id="draft-security-123456";subject="[REVIEW] Daily [draft:draft-security]";state={"date":date_key,"date_display":"January 02, 2030","stage":"review_sent","content_valid":True,"draft_id":draft_id,"subject":"Daily","review_subject":subject,"source":{"type":"iris_generated"},"raw_content":"valid","updated_at":at.isoformat()};ca.atomic_json_write(ca.STATE_FILE,{date_key:state});ca.atomic_json_write(ca.PROCESSED_FILE,[]);paths=(ca.STATE_FILE,ca.PROCESSED_FILE,ca.INBOX_FILE,ca.ALERTS_FILE,ca.HEARTBEAT_FILE,ca.REPORTS_FILE,ca.AUTOMATION_LOCK);baseline={str(p):(p.exists(),p.read_bytes() if p.exists() else None) for p in paths};msg=self.gmail_message("Re: "+subject,"Approved")
         app=self.app(initial_drafts={draft_id:{"id":draft_id,"status":"pending_approval","subject":"Daily","html_body":"x","text_body":"x","date":"January 02, 2030"}})
         with patch.object(ca,"now_et",return_value=at),patch.object(ca,"gmail_search",return_value=[{"id":"mail-1"}]),patch.object(ca,"gmail_get",return_value=msg):response=app.post("/api/lhos/automation/check-replies?dry_run=true",headers={"x-lhos-automation-token":"secret"})
-        self.assertEqual(response.json()["action"],"would_process_inbox");self.assertEqual(response.json()["classification"],"approve");self.assertEqual({str(p):(p.exists(),p.read_bytes() if p.exists() else None) for p in paths},baseline)
+        self.assertEqual(response.json()["action"],"would_process_direct_approver_email");self.assertEqual(response.json()["classification"],"approve");self.assertEqual({str(p):(p.exists(),p.read_bytes() if p.exists() else None) for p in paths},baseline)
 
     def test_provider_error_bodies_are_never_disclosed(self):
         class Response:
@@ -143,7 +147,7 @@ class SecurityHardeningTests(unittest.TestCase):
     def gmail_message(subject, body):
         data=base64.urlsafe_b64encode(body.encode()).decode().rstrip("=")
         return {"id":"mail-1","internalDate":"1000","payload":{"mimeType":"text/plain","headers":[
-            {"name":"From","value":"a@example.com"},{"name":"Subject","value":subject},
+            {"name":"From","value":"a@example.com"},{"name":"To","value":"iris@example.com"},{"name":"Subject","value":subject},{"name":"Message-ID","value":"<mail-1@example.com>"},
             {"name":"Authentication-Results","value":"mx.google.com; dkim=pass header.i=@example.com; dmarc=pass"}],
             "body":{"data":data}}}
 
@@ -153,7 +157,7 @@ class SecurityHardeningTests(unittest.TestCase):
         msg=self.gmail_message("LifeHouse OS general note","Approved")
         with patch.object(ca,"now_et",return_value=at),patch.object(ca,"gmail_search",return_value=[{"id":"mail-1"}]),patch.object(ca,"gmail_get",return_value=msg):
             r=self.app().post("/api/lhos/automation/check-replies",headers={"x-lhos-automation-token":"secret"})
-        self.assertIn("ignored_unbound_message",str(r.json()))
+        self.assertIn("clarification_needed",str(r.json()))
 
     def test_prepare_creates_hold_and_processes_pending_reference_without_state(self):
         at=ca.datetime(2030,1,2,7,30,tzinfo=ca.ET);date_key="2030-01-02";msg=self.gmail_message("LifeHouse OS daily briefing reference","Please use travel preparation and a calmer return-home transition as today's editorial reference.");reviews=[];app=self.app(send_email=lambda *a:reviews.append(a))
