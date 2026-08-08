@@ -30,7 +30,7 @@ INBOX_AGENT_START_DATE=os.getenv("LHOS_INBOX_AGENT_START_DATE","2026-08-01").str
 INBOX_CONTEXT_SINCE=os.getenv("LHOS_INBOX_CONTEXT_SINCE","2026-07-30").strip()
 KRISTINA="kristina@freedomforgeai.com"
 ALERT_EMAIL="bobbyatf@gmail.com"  # Policy invariant: ALL operational/failure alerts go only to Bobby.
-IMESSAGE_ENABLED=False  # Policy invariant: LHOS iMessage intake/outbound is disabled in code.
+IMESSAGE_ENABLED=os.getenv("LHOS_IMESSAGE_ENABLED","false").strip().lower()=="true"  # Re-enabled 2026-08-08 by Bobby; env-driven, fail-closed default false.
 
 def generate_fallback_bundle(date_key, reference=""):
     """Public seam for tests; provider failures fall back to curated copy when no reference exists."""

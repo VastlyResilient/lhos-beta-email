@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import httpx
 ET=ZoneInfo("America/New_York"); CHAT_ID=1079; CHAT_GUID="any;+;2232f1a0c45c4a14832adff0ec8120da"; CHAT_IDENTIFIER="2232f1a0c45c4a14832adff0ec8120da"; GROUP_ID="CD24A6BC-7F93-4D2D-A565-ADED19DD01FC"
 NAMES={'16770e54d6d075bf96c70208dfd7e781364e2cf3b832c85bfebaaed28d33f027': 'Thomas Appling', '67ba33e3c4f07c6cb101e1af49df6fa3162d118c8804176ec8f1c9ba2fd90ad0': 'Kristina'}; SIGN="-AUTOSENT BY ZILLA"; STATE=Path("/Users/bobby/.zilla/lhos-imessage/state.json"); LOG=Path("/Users/bobby/.zilla/logs/lhos-imessage-bridge.log")
-TOKEN=Path("/Users/bobby/lhos-beta-email/.automation_token"); API="https://lhos-beta-email-production.up.railway.app"; IMESSAGE_ENABLED=False  # Policy invariant: cannot be re-enabled by environment or scheduler configuration.; WORDS=("email","draft","review","content","upload","send","approve","revision","revise","change","iris","zilla")
+TOKEN=Path("/Users/bobby/lhos-beta-email/.automation_token"); API="https://lhos-beta-email-production.up.railway.app"; IMESSAGE_ENABLED=True  # Re-enabled 2026-08-08 by Bobby (explicit authorization).; WORDS=("email","draft","review","content","upload","send","approve","revision","revise","change","iris","zilla")
 def log(x): LOG.parent.mkdir(parents=True,exist_ok=True);LOG.open("a").write(f"{dt.datetime.now(ET).isoformat()} {x}\n")
 def load():
  try:return json.loads(STATE.read_text())
